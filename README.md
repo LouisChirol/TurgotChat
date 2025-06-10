@@ -1,7 +1,7 @@
 # Colbert
 
 A RAG-powered chatbot for querying French public administration procedures, laws, and official guidelines from Service-Public.fr.
-The app is available at (https://colbertchat.fr)[https://colbertchat.fr/], with the main branch of the repo deployed.
+The app is available at [https://colbertchat.fr](https://colbertchat.fr/), with the main branch of the repo deployed.
 
 ## Overview
 

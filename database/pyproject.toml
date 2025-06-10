@@ -1,0 +1,17 @@
+[project]
+name = "database"
+version = "0.1.0"
+description = "Database processing for Colbert"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "langchain>=0.1.0",
+    "langchain-mistralai>=0.0.1",
+    "langchain-chroma>=0.0.1",
+    "chromadb>=0.4.22",
+    "tqdm>=4.66.1",
+    "python-dotenv>=1.0.0",
+    "mistralai>=0.0.12",
+    "ipykernel>=6.29.5",
+    "loguru>=0.7.3",
+]

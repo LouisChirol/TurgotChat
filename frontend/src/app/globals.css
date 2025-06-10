@@ -1,0 +1,63 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 0, 0, 0;
+  --background-rgb: 255, 255, 255;
+}
+
+html,
+body {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: rgb(var(--background-rgb));
+  position: relative;
+}
+
+@supports (padding: max(0px)) {
+  .pb-safe {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+}
+
+@layer components {
+  .chat-container {
+    @apply flex flex-col h-[calc(100dvh-4rem)] max-w-4xl mx-auto;
+  }
+  
+  .message-bubble {
+    @apply rounded-lg px-4 py-2 max-w-[80%];
+  }
+  
+  .user-message {
+    @apply bg-blue-600 text-white;
+  }
+  
+  .ai-message {
+    @apply bg-gray-100 text-gray-900;
+  }
+  
+  .chat-input {
+    @apply flex items-center gap-2;
+  }
+  
+  .chat-input input {
+    @apply flex-1 rounded-lg border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500;
+  }
+  
+  .chat-input button {
+    @apply rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+}
+
+.send-button {
+  @apply p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed;
+} 

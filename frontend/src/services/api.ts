@@ -38,4 +38,22 @@ export const sendMessage = async (message: string): Promise<ChatResponse> => {
   }
 
   return response.json();
+};
+
+export const clearSession = async (): Promise<void> => {
+  const sessionId = getSessionId();
+  
+  const response = await fetch(`${API_URL}/clear-session`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ 
+      session_id: sessionId
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to clear session history');
+  }
 }; 

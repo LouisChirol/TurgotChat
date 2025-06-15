@@ -1,15 +1,19 @@
+import logging
 import os
 import tempfile
+from datetime import datetime
 from pathlib import Path
+from typing import List, Optional
 
 from colbert_agent import ColbertAgent
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from loguru import logger
 from pdf_service import create_chat_pdf
 from pydantic import BaseModel
+from redis_service import RedisService
 
 # Load environment variables
 load_dotenv()
@@ -48,6 +52,10 @@ class ChatResponse(BaseModel):
 
 
 class ExportPDFRequest(BaseModel):
+    session_id: str
+
+
+class ClearSessionRequest(BaseModel):
     session_id: str
 
 
@@ -96,6 +104,18 @@ async def export_pdf(request: ExportPDFRequest):
     except Exception as e:
         logger.error(f"Error exporting PDF: {str(e)}")
         raise HTTPException(status_code=500, detail="Error exporting PDF file")
+
+
+@app.post("/clear-session")
+async def clear_session(request: ClearSessionRequest):
+    """Clear the chat history for a given session."""
+    try:
+        redis_service = RedisService()
+        redis_service.clear_session_history(request.session_id)
+        return {"status": "success", "message": "Session history cleared successfully"}
+    except Exception as e:
+        logger.error(f"Error clearing session history: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error clearing session history")
 
 
 if __name__ == "__main__":

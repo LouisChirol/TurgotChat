@@ -22,6 +22,8 @@ dependencies = [
     "ipykernel>=6.29.5",
     "langchain-chroma>=0.2.4",
     "reportlab>=4.1.0",
+    "markdown-it-py>=3.0.0",
+    "Pillow>=10.0.0",
 ]
 requires-python = ">=3.11"
 

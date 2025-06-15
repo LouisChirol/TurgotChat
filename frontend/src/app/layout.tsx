@@ -1,7 +1,7 @@
+import Disclaimer from '@/components/Disclaimer'
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
-import Disclaimer from '@/components/Disclaimer'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -20,7 +20,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="fr">
-      <body className={`${inter.className} bg-gray-50`}>
+      <body className={`${inter.className} bg-gray-50 dark:bg-gray-900 transition-colors duration-200`}>
         <Disclaimer />
         {children}
       </body>

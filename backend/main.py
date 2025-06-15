@@ -1,10 +1,14 @@
 import os
+import tempfile
+from pathlib import Path
 
 from colbert_agent import ColbertAgent
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from loguru import logger
+from pdf_service import create_chat_pdf
 from pydantic import BaseModel
 
 # Load environment variables
@@ -43,6 +47,10 @@ class ChatResponse(BaseModel):
     answer: str
 
 
+class ExportPDFRequest(BaseModel):
+    session_id: str
+
+
 @app.get("/")
 async def root():
     return {"message": "Welcome to Colbert API"}
@@ -62,6 +70,32 @@ async def chat(request: ChatRequest):
     except Exception as e:
         logger.error(f"Error processing chat request: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/export-pdf")
+async def export_pdf(request: ExportPDFRequest):
+    """Export the chat history as a PDF file."""
+    try:
+        # Create the PDF file
+        pdf_path = create_chat_pdf(request.session_id)
+        
+        # Return the file as a response
+        response = FileResponse(
+            pdf_path,
+            media_type="application/pdf",
+            filename=f"colbert_chat_{request.session_id}.pdf",
+            background=None  # This ensures the file is deleted after sending
+        )
+        
+        # Delete the file after sending
+        response.background = lambda: os.unlink(pdf_path)
+        
+        return response
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Error exporting PDF: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error exporting PDF file")
 
 
 if __name__ == "__main__":

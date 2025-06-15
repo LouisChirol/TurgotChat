@@ -44,13 +44,13 @@ const Message = ({ role, content, sources = [], secondarySources = [], isError =
       <div
         className={`max-w-[80%] rounded-lg p-4 break-words ${
           isUser
-            ? 'bg-blue-500 text-white'
+            ? 'bg-blue-500 text-white dark:bg-blue-600'
             : isError || content.includes("Désolé, une erreur est survenue. Veuillez réessayer.")
-            ? 'bg-red-100 text-red-800'
-            : 'bg-gray-100 text-gray-800'
-        }`}
+            ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+            : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
+        } transition-colors duration-200`}
       >
-        <div className={`prose prose-sm max-w-none ${isUser ? 'prose-invert' : 'prose-gray'}`}>
+        <div className={`prose prose-sm max-w-none ${isUser ? 'prose-invert' : 'prose-gray dark:prose-invert'}`}>
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
             components={{
@@ -61,7 +61,7 @@ const Message = ({ role, content, sources = [], secondarySources = [], isError =
                   className={`break-all ${
                     isUser
                       ? 'text-blue-200 hover:text-white'
-                      : 'text-blue-600 hover:text-blue-800'
+                      : 'text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300'
                   } underline transition-colors`}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -69,31 +69,31 @@ const Message = ({ role, content, sources = [], secondarySources = [], isError =
               ),
               // Style lists
               ul: ({ node, ...props }) => (
-                <ul {...props} className={`list-disc pl-4 space-y-1 ${isUser ? 'text-white' : 'text-gray-800'}`} />
+                <ul {...props} className={`list-disc pl-4 space-y-1 ${isUser ? 'text-white' : 'text-gray-800 dark:text-gray-200'}`} />
               ),
               ol: ({ node, ...props }) => (
-                <ol {...props} className={`list-decimal pl-4 space-y-1 ${isUser ? 'text-white' : 'text-gray-800'}`} />
+                <ol {...props} className={`list-decimal pl-4 space-y-1 ${isUser ? 'text-white' : 'text-gray-800 dark:text-gray-200'}`} />
               ),
               // Style paragraphs
               p: ({ node, ...props }) => (
-                <p {...props} className={`mb-2 ${isUser ? 'text-white' : 'text-gray-800'}`} />
+                <p {...props} className={`mb-2 ${isUser ? 'text-white' : 'text-gray-800 dark:text-gray-200'}`} />
               ),
               // Style headings
               h1: ({ node, ...props }) => (
-                <h1 {...props} className={`text-xl font-bold mb-2 ${isUser ? 'text-white' : 'text-gray-900'}`} />
+                <h1 {...props} className={`text-xl font-bold mb-2 ${isUser ? 'text-white' : 'text-gray-900 dark:text-gray-100'}`} />
               ),
               h2: ({ node, ...props }) => (
-                <h2 {...props} className={`text-lg font-bold mb-2 ${isUser ? 'text-white' : 'text-gray-900'}`} />
+                <h2 {...props} className={`text-lg font-bold mb-2 ${isUser ? 'text-white' : 'text-gray-900 dark:text-gray-100'}`} />
               ),
               h3: ({ node, ...props }) => (
-                <h3 {...props} className={`text-base font-bold mb-2 ${isUser ? 'text-white' : 'text-gray-900'}`} />
+                <h3 {...props} className={`text-base font-bold mb-2 ${isUser ? 'text-white' : 'text-gray-900 dark:text-gray-100'}`} />
               ),
               // Style code blocks
               code: ({ node, inline, ...props }: { node?: any; inline?: boolean } & React.HTMLAttributes<HTMLElement>) => (
                 inline ? (
-                  <code {...props} className={`${isUser ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-800'} rounded px-1 py-0.5`} />
+                  <code {...props} className={`${isUser ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-800 dark:bg-gray-600 dark:text-gray-200'} rounded px-1 py-0.5`} />
                 ) : (
-                  <code {...props} className={`block ${isUser ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-800'} rounded p-2 my-2`} />
+                  <code {...props} className={`block ${isUser ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-800 dark:bg-gray-600 dark:text-gray-200'} rounded p-2 my-2`} />
                 )
               ),
             }}
@@ -102,9 +102,9 @@ const Message = ({ role, content, sources = [], secondarySources = [], isError =
           </ReactMarkdown>
         </div>
         {sources.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-gray-200">
+          <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600">
             <details className="group">
-              <summary className="flex items-center gap-2 cursor-pointer text-sm font-semibold text-gray-900 hover:text-blue-600 transition-colors">
+              <summary className="flex items-center gap-2 cursor-pointer text-sm font-semibold text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
                 <svg
                   className="w-4 h-4 transform group-open:rotate-90 transition-transform"
                   fill="none"
@@ -122,13 +122,13 @@ const Message = ({ role, content, sources = [], secondarySources = [], isError =
                       href={source.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-blue-600 hover:text-blue-800 hover:underline truncate block max-w-full"
+                      className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline truncate block max-w-full"
                       title={source.url}
                     >
                       {source.url.length > 60 ? `${source.url.substring(0, 60)}...` : source.url}
                     </a>
                     {source.excerpt && (
-                      <p className="text-gray-600 mt-1 break-words text-sm">{source.excerpt}</p>
+                      <p className="text-gray-600 dark:text-gray-400 mt-1 break-words text-sm">{source.excerpt}</p>
                     )}
                   </li>
                 ))}
@@ -137,7 +137,7 @@ const Message = ({ role, content, sources = [], secondarySources = [], isError =
 
             {secondarySources.length > 0 && (
               <details className="group mt-3">
-                <summary className="flex items-center gap-2 cursor-pointer text-sm font-semibold text-gray-700 hover:text-blue-600 transition-colors">
+                <summary className="flex items-center gap-2 cursor-pointer text-sm font-semibold text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
                   <svg
                     className="w-4 h-4 transform group-open:rotate-90 transition-transform"
                     fill="none"
@@ -155,13 +155,13 @@ const Message = ({ role, content, sources = [], secondarySources = [], isError =
                         href={source.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-blue-500 hover:text-blue-700 hover:underline truncate block max-w-full"
+                        className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 hover:underline truncate block max-w-full"
                         title={source.url}
                       >
                         {source.url.length > 60 ? `${source.url.substring(0, 60)}...` : source.url}
                       </a>
                       {source.excerpt && (
-                        <p className="text-gray-500 mt-1 break-words text-sm">{source.excerpt}</p>
+                        <p className="text-gray-500 dark:text-gray-400 mt-1 break-words text-sm">{source.excerpt}</p>
                       )}
                     </li>
                   ))}

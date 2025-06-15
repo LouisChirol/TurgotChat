@@ -51,7 +51,7 @@ export default function Home() {
 
   return (
     <main className="flex flex-col h-[100dvh]">
-      <header className="shrink-0 bg-white border-b border-gray-200">
+      <header className="shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 transition-colors duration-200">
         <div className="max-w-4xl mx-auto px-4 py-4">
           <div className="flex items-center gap-4">
             <Image
@@ -63,14 +63,14 @@ export default function Home() {
             />
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-bold">Colbert</h1>
+                <h1 className="text-2xl font-bold dark:text-white">Colbert</h1>
                 <div className="w-6 h-4 flex overflow-hidden rounded-sm shadow-sm">
                   <div className="flex-1 bg-blue-600"></div>
                   <div className="flex-1 bg-white"></div>
                   <div className="flex-1 bg-red-600"></div>
                 </div>
               </div>
-              <p className="text-sm text-gray-600">Votre assistant administratif</p>
+              <p className="text-sm text-gray-600 dark:text-gray-300">Votre assistant administratif</p>
             </div>
           </div>
         </div>
@@ -83,7 +83,7 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="shrink-0 bg-white border-t border-gray-200 pb-safe">
+        <div className="shrink-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 pb-safe transition-colors duration-200">
           <div className="h-1 flex max-w-4xl mx-auto">
             <div className="flex-1 bg-blue-600"></div>
             <div className="flex-1 bg-white"></div>

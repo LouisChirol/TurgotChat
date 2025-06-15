@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@headlessui/react": "^2.2.4",
     "@heroicons/react": "^2.2.0",
     "@tailwindcss/typography": "^0.5.16",
     "@types/uuid": "^10.0.0",

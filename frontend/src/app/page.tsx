@@ -1,10 +1,14 @@
 'use client';
 
+import AppDrawer from '@/components/AppDrawer';
 import ChatInput from '@/components/ChatInput';
 import ChatInterface from '@/components/ChatInterface';
 import ConfirmationModal from '@/components/ConfirmationModal';
+import { DarkModeButton, DisclaimerModal, InfoButton } from '@/components/Disclaimer';
+import SupportButton from '@/components/SupportButton';
 import { clearSession, sendMessage } from '@/services/api';
 import { getSessionId } from '@/services/session';
+import { Bars3Icon } from '@heroicons/react/24/outline';
 import Image from 'next/image';
 import { useState } from 'react';
 
@@ -19,6 +23,8 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [isDisclaimerOpen, setIsDisclaimerOpen] = useState(false);
 
   const handleSendMessage = async (message: string) => {
     if (!message.trim()) return;
@@ -113,6 +119,13 @@ export default function Home() {
     }
   };
 
+  const handleSupport = () => {
+    window.open('https://www.buymeacoffee.com/colbert', '_blank');
+  };
+  const handleGitHub = () => {
+    window.open('https://github.com/louis030195/ColbertChat', '_blank');
+  };
+
   return (
     <main className="flex flex-col h-[100dvh]">
       <header className="shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 transition-colors duration-200">
@@ -138,76 +151,15 @@ export default function Home() {
                 <p className="text-sm text-gray-600 dark:text-gray-300">Votre assistant administratif</p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <InfoButton onClick={() => setIsDisclaimerOpen(true)} />
+              <DarkModeButton />
               <button
-                onClick={() => setIsResetModalOpen(true)}
-                disabled={isLoading || messages.length <= 1}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  isLoading || messages.length <= 1
-                    ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-                    : 'bg-red-50 dark:bg-red-900/50 text-red-600 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900'
-                }`}
+                onClick={() => setIsDrawerOpen(true)}
+                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                aria-label="Ouvrir le menu"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-4 w-4"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-                Vider la discussion
-              </button>
-              <button
-                onClick={handleExportPDF}
-                disabled={isExporting || isLoading || messages.length <= 1}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  isExporting || isLoading || messages.length <= 1
-                    ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-                    : 'bg-blue-50 dark:bg-blue-900/50 text-blue-600 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900'
-                }`}
-              >
-                {isExporting ? (
-                  <>
-                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                        fill="none"
-                      />
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      />
-                    </svg>
-                    Export en cours...
-                  </>
-                ) : (
-                  <>
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-4 w-4"
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                    Exporter en PDF
-                  </>
-                )}
+                <Bars3Icon className="h-7 w-7 text-gray-700 dark:text-gray-200" />
               </button>
             </div>
           </div>
@@ -221,6 +173,8 @@ export default function Home() {
           </div>
         </div>
 
+        <SupportButton />
+
         <div className="shrink-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 pb-safe transition-colors duration-200">
           <div className="h-1 flex max-w-4xl mx-auto">
             <div className="flex-1 bg-blue-600"></div>
@@ -232,6 +186,21 @@ export default function Home() {
           </div>
         </div>
       </div>
+
+      <AppDrawer
+        open={isDrawerOpen}
+        onClose={() => setIsDrawerOpen(false)}
+        onExportPDF={handleExportPDF}
+        onClear={() => setIsResetModalOpen(true)}
+        onSupport={handleSupport}
+        onGitHub={handleGitHub}
+        isExporting={isExporting}
+        isClearing={isLoading}
+        disableExport={isExporting || isLoading || messages.length <= 1}
+        disableClear={isLoading || messages.length <= 1}
+      />
+
+      <DisclaimerModal isOpen={isDisclaimerOpen} onClose={() => setIsDisclaimerOpen(false)} />
 
       <ConfirmationModal
         isOpen={isResetModalOpen}

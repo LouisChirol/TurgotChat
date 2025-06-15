@@ -1,23 +1,46 @@
 'use client';
 
+import { Coffee, Info } from 'lucide-react';
 import { useState } from 'react';
-import { InformationCircleIcon } from '@heroicons/react/24/outline';
 
 export default function Disclaimer() {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
     <>
-      <button
-        onClick={() => setIsOpen(true)}
-        className="fixed top-4 right-4 bg-yellow-400 hover:bg-yellow-500 text-black p-2 rounded-full shadow-lg z-50"
-        aria-label="Afficher le disclaimer"
-      >
-        <InformationCircleIcon className="h-6 w-6" />
-      </button>
+      <div className="fixed top-4 right-12 flex gap-2 z-50">
+        <button
+          onClick={() => setIsOpen(true)}
+          className="bg-yellow-400 hover:bg-yellow-500 text-black p-2 rounded-full shadow-lg group relative"
+          aria-label="Afficher le disclaimer"
+        >
+          <Info className="h-6 w-6" />
+          <span className="absolute left-1/2 -translate-x-1/2 top-full mt-2 bg-gray-900 text-white text-sm py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap max-w-[200px] text-center">
+            Informations importantes
+          </span>
+        </button>
+        <button
+          onClick={() => window.open('https://coff.ee/louischirol', '_blank')}
+          className="bg-orange-400 hover:bg-lime-500 text-black p-2 rounded-full shadow-lg group relative"
+          aria-label="Soutenir le projet"
+        >
+          <Coffee className="h-6 w-6" />
+          <span className="absolute left-1/2 -translate-x-1/2 top-full mt-2 bg-gray-900 text-white text-sm py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap max-w-[200px] text-center">
+            Soutenir le projet
+          </span>
+        </button>
+      </div>
 
       {isOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          onClick={(e) => {
+            // Only close if clicking the overlay itself, not its children
+            if (e.target === e.currentTarget) {
+              setIsOpen(false);
+            }
+          }}
+        >
           <div className="bg-white rounded-lg max-w-2xl w-full p-6 max-h-[80vh] overflow-y-auto">
             <div className="flex justify-between items-start mb-4">
               <h2 className="text-xl font-bold">⚠️ Informations importantes</h2>

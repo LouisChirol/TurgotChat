@@ -42,7 +42,7 @@ const Message = ({ role, content, sources = [], secondarySources = [], isError =
         </div>
       )}
       <div
-        className={`max-w-[80%] rounded-lg p-4 ${
+        className={`max-w-[80%] rounded-lg p-4 break-words ${
           isUser
             ? 'bg-blue-500 text-white'
             : isError || content.includes("Désolé, une erreur est survenue. Veuillez réessayer.")
@@ -58,7 +58,7 @@ const Message = ({ role, content, sources = [], secondarySources = [], isError =
               a: ({ node, ...props }) => (
                 <a
                   {...props}
-                  className={`${
+                  className={`break-all ${
                     isUser
                       ? 'text-blue-200 hover:text-white'
                       : 'text-blue-600 hover:text-blue-800'

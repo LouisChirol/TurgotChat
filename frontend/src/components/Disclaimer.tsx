@@ -1,6 +1,6 @@
 'use client';
 
-import { Coffee, Info } from 'lucide-react';
+import { Info } from 'lucide-react';
 import { useState } from 'react';
 
 export default function Disclaimer() {
@@ -19,23 +19,24 @@ export default function Disclaimer() {
             Informations importantes
           </span>
         </button>
-        <button
-          onClick={() => window.open('https://coff.ee/louischirol', '_blank')}
-          className="bg-orange-400 hover:bg-lime-500 text-black p-2 rounded-full shadow-lg group relative"
-          aria-label="Soutenir le projet"
+      </div>
+
+      <div className="fixed bottom-2 left-1/2 -translate-x-1/2 z-40">
+        <a
+          href="https://coff.ee/louischirol"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors bg-white/60 backdrop-blur-sm px-3 py-1.5 rounded-full shadow-sm"
         >
-          <Coffee className="h-6 w-6" />
-          <span className="absolute left-1/2 -translate-x-1/2 top-full mt-2 bg-gray-900 text-white text-sm py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap max-w-[200px] text-center">
-            Soutenir le projet
-          </span>
-        </button>
+          <span className="text-xs">🙏</span>
+          <span>Soutenir le projet</span>
+        </a>
       </div>
 
       {isOpen && (
         <div 
           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
           onClick={(e) => {
-            // Only close if clicking the overlay itself, not its children
             if (e.target === e.currentTarget) {
               setIsOpen(false);
             }
@@ -71,6 +72,17 @@ export default function Disclaimer() {
               <p>
                 En utilisant ce site, vous acceptez ces conditions et reconnaissez que la responsabilité du fournisseur du service ne saurait être engagée en cas de mauvaise interprétation, d'utilisation abusive ou de préjudice résultant des réponses de l'IA.
               </p>
+              <div className="mt-6 pt-4 border-t border-gray-200 text-center">
+                <a
+                  href="https://coff.ee/louischirol"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
+                >
+                  <span>🙏</span>
+                  <span className="font-medium">Soutenir le projet</span>
+                </a>
+              </div>
             </div>
           </div>
         </div>

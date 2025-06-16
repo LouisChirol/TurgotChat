@@ -71,6 +71,15 @@ class RedisService:
         # Clear from Redis as well
         self.redis_client.delete(f"chat:{session_id}")
 
+    def clear_session_history(self, session_id: str) -> None:
+        """Clear all messages for a given session."""
+        try:
+            # Delete the chat key which contains all messages (using the same key pattern as get_session_history)
+            self.redis_client.delete(f"chat:{session_id}")
+            logger.info(f"Cleared history for session {session_id}")
+        except Exception as e:
+            logger.error(f"Error clearing session history: {str(e)}")
+            raise
 
 # Create a singleton instance
 redis_service = RedisService()

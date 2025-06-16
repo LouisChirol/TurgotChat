@@ -120,10 +120,10 @@ export default function Home() {
   };
 
   const handleSupport = () => {
-    window.open('https://www.buymeacoffee.com/colbert', '_blank');
+    window.open('https://www.buymeacoffee.com/louischirol', '_blank');
   };
   const handleGitHub = () => {
-    window.open('https://github.com/louis030195/ColbertChat', '_blank');
+    window.open('https://github.com/LouisChirol/ColbertChat', '_blank');
   };
 
   return (

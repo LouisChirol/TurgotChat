@@ -1,17 +1,32 @@
 import os
 import uuid
+from pathlib import Path
 
 from colbert_agent import ColbertAgent
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from loguru import logger
+from pdf_service import create_chat_pdf
 from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel
+from redis_service import RedisService
 from visitor_metrics import track_message, track_session_end, track_session_start
 
 # Load environment variables
 load_dotenv()
+
+# Determine if we're running in Docker container
+IS_DOCKER = os.path.exists("/.dockerenv")
+
+# Set database path based on environment
+if IS_DOCKER:
+    LAST_UPDATE_PATH = Path("/app/database/last_update.txt")
+else:
+    WORKSPACE_ROOT = Path(__file__).parent.parent
+    LAST_UPDATE_PATH = WORKSPACE_ROOT / "database" / "last_update.txt"
+
 
 # Ensure logs directory exists
 logs_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
@@ -47,6 +62,14 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     answer: str
+
+
+class ExportPDFRequest(BaseModel):
+    session_id: str
+
+
+class ClearSessionRequest(BaseModel):
+    session_id: str
 
 
 @app.get("/")
@@ -86,6 +109,56 @@ async def chat(request: ChatRequest):
     except Exception as e:
         logger.error(f"Error processing chat request: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/export-pdf")
+async def export_pdf(request: ExportPDFRequest):
+    """Export the chat history as a PDF file."""
+    try:
+        # Create the PDF file
+        pdf_path = create_chat_pdf(request.session_id)
+        
+        # Return the file as a response
+        response = FileResponse(
+            pdf_path,
+            media_type="application/pdf",
+            filename=f"colbert_chat_{request.session_id}.pdf",
+            background=None  # This ensures the file is deleted after sending
+        )
+        
+        # Delete the file after sending
+        response.background = lambda: os.unlink(pdf_path)
+        
+        return response
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Error exporting PDF: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error exporting PDF file")
+
+
+@app.post("/clear-session")
+async def clear_session(request: ClearSessionRequest):
+    """Clear the chat history for a given session."""
+    try:
+        redis_service = RedisService()
+        redis_service.clear_session_history(request.session_id)
+        return {"status": "success", "message": "Session history cleared successfully"}
+    except Exception as e:
+        logger.error(f"Error clearing session history: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error clearing session history")
+
+
+@app.get("/last-update")
+async def get_last_update():
+    try:
+        with open(LAST_UPDATE_PATH, "r") as f:
+            last_update = f.read().strip()
+            logger.info(f"Last update: {last_update}")
+        return {"last_update": last_update}
+    except FileNotFoundError:
+        logger.error(f"Last update file not found at {LAST_UPDATE_PATH}")
+        return {"last_update": "Unknown"}
 
 
 if __name__ == "__main__":

@@ -1,4 +1,5 @@
 import zipfile
+from datetime import datetime
 from pathlib import Path
 
 import requests
@@ -55,7 +56,13 @@ def main():
         extract_archive(zip_path, dest_path)
         zip_path.unlink()  # Remove the zip file after extraction
 
+    # Update last_update.txt with current date
+    update_date = datetime.now().strftime("%d/%m/%Y")
+    with open("last_update.txt", "w") as f:
+        f.write(update_date)
+
     print("\nDownload and extraction completed successfully!")
+    print(f"Database last updated: {update_date}")
 
 
 if __name__ == "__main__":

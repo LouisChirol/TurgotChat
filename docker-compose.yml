@@ -20,6 +20,7 @@ services:
     volumes:
       - ./backend/logs:/app/logs
       - ./database/chroma_db:/app/database/chroma_db
+      - ./database/last_update.txt:/app/database/last_update.txt
     restart: unless-stopped
 
   redis:

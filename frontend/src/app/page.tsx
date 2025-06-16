@@ -178,7 +178,7 @@ export default function Home() {
         <div className="shrink-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 pb-safe transition-colors duration-200">
           <div className="h-1 flex max-w-4xl mx-auto">
             <div className="flex-1 bg-blue-600"></div>
-            <div className="flex-1 bg-white dark:bg-gray-800"></div>
+            <div className="flex-1 bg-white"></div>
             <div className="flex-1 bg-red-600"></div>
           </div>
           <div className="max-w-4xl mx-auto px-4 py-4">

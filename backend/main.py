@@ -132,6 +132,7 @@ async def clear_session(request: ClearSessionRequest):
 @app.get("/last-update")
 async def get_last_update():
     try:
+        logger.debug(f"Last update path: {LAST_UPDATE_PATH}")
         with open(LAST_UPDATE_PATH, "r") as f:
             last_update = f.read().strip()
             logger.info(f"Last update: {last_update}")

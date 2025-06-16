@@ -92,7 +92,7 @@ const AppDrawer = ({
                       className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-yellow-50 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300 hover:bg-yellow-100 dark:hover:bg-yellow-900 transition-colors"
                     >
                       <HeartIcon className="h-5 w-5" />
-                      <span>Soutenir</span>
+                      <span>Soutenir le projet</span>
                     </button>
                     <button
                       onClick={onGitHub}

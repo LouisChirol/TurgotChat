@@ -145,3 +145,4 @@ backend/chroma_db
 
 scripts/connect_to_server.sh
 scripts/copy_to_server.sh
+!database/last_update.txt

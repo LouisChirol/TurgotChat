@@ -18,6 +18,17 @@ from redis_service import RedisService
 # Load environment variables
 load_dotenv()
 
+# Determine if we're running in Docker container
+IS_DOCKER = os.path.exists("/.dockerenv")
+
+# Set database path based on environment
+if IS_DOCKER:
+    LAST_UPDATE_PATH = Path("/app/database/last_update.txt")
+else:
+    WORKSPACE_ROOT = Path(__file__).parent.parent
+    LAST_UPDATE_PATH = WORKSPACE_ROOT / "database" / "last_update.txt"
+
+
 # Ensure logs directory exists
 logs_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
 os.makedirs(logs_dir, exist_ok=True)
@@ -116,6 +127,18 @@ async def clear_session(request: ClearSessionRequest):
     except Exception as e:
         logger.error(f"Error clearing session history: {str(e)}")
         raise HTTPException(status_code=500, detail="Error clearing session history")
+
+
+@app.get("/last-update")
+async def get_last_update():
+    try:
+        with open(LAST_UPDATE_PATH, "r") as f:
+            last_update = f.read().strip()
+            logger.info(f"Last update: {last_update}")
+        return {"last_update": last_update}
+    except FileNotFoundError:
+        logger.error("Last update file not found")
+        return {"last_update": "Unknown"}
 
 
 if __name__ == "__main__":

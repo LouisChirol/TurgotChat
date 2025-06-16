@@ -56,4 +56,13 @@ export const clearSession = async (): Promise<void> => {
   if (!response.ok) {
     throw new Error('Failed to clear session history');
   }
+};
+
+export const getLastUpdate = async (): Promise<string> => {
+  const response = await fetch(`${API_URL}/last-update`);
+  if (!response.ok) {
+    throw new Error('Failed to get last update date');
+  }
+  const data = await response.json();
+  return data.last_update;
 }; 

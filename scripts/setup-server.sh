@@ -14,10 +14,10 @@ sudo usermod -aG docker $USER
 sudo apt install -y nginx
 
 # Configure Nginx
-sudo tee /etc/nginx/sites-available/colbertchat << EOF
+sudo tee /etc/nginx/sites-available/turgotchat << EOF
 server {
     listen 80;
-    server_name colbertchat.fr www.colbertchat.fr;
+    server_name turgotchat.fr www.turgotchat.fr;
 
     location / {
         proxy_pass http://localhost:3000;
@@ -31,7 +31,7 @@ server {
 
 server {
     listen 80;
-    server_name api.colbertchat.fr;
+    server_name api.turgotchat.fr;
 
     location / {
         proxy_pass http://localhost:8000;
@@ -45,7 +45,7 @@ server {
 EOF
 
 # Enable the site
-sudo ln -s /etc/nginx/sites-available/colbertchat /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/turgotchat /etc/nginx/sites-enabled/
 sudo nginx -t
 sudo systemctl restart nginx
 
@@ -53,7 +53,7 @@ sudo systemctl restart nginx
 sudo apt install -y certbot python3-certbot-nginx
 
 # Get SSL certificates
-sudo certbot --nginx -d colbertchat.fr -d www.colbertchat.fr -d api.colbertchat.fr
+sudo certbot --nginx -d turgotchat.fr -d www.turgotchat.fr -d api.turgotchat.fr
 
 # Set environment variables
 export MISTRAL_API_KEY=your-api-key
@@ -64,4 +64,4 @@ docker-compose down
 docker-compose build --no-cache
 docker-compose up -d
 
-echo "Setup complete! Your application is running at https://colbertchat.fr" 
+echo "Setup complete! Your application is running at https://turgotchat.fr" 

@@ -1,8 +1,8 @@
 import { v4 as uuidv4 } from 'uuid';
 
-const SESSION_ID_KEY = 'colbert_session_id';
+const SESSION_ID_KEY = 'turgot_session_id';
 const SESSION_TIMEOUT = 60 * 60 * 1000; // 30 minutes in milliseconds
-const LAST_ACTIVITY_KEY = 'colbert_last_activity';
+const LAST_ACTIVITY_KEY = 'turgot_last_activity';
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export const createSession = async (): Promise<string> => {

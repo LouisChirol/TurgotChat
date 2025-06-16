@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
-from colbert_agent import ColbertAgent
+from turgot_agent import TurgotAgent
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -34,11 +34,11 @@ logs_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
 os.makedirs(logs_dir, exist_ok=True)
 
 # Configure logger with absolute path
-log_file = os.path.join(logs_dir, "colbert_backend.log")
+log_file = os.path.join(logs_dir, "turgot_backend.log")
 logger.add(log_file, rotation="10 MB", retention="7 days", level="INFO")
 
 app = FastAPI(
-    title="Colbert Backend",
+    title="Turgot Backend",
     description="RAG-powered chatbot for French public administration information",
     version="0.1.0",
 )
@@ -72,16 +72,16 @@ class ClearSessionRequest(BaseModel):
 
 @app.get("/")
 async def root():
-    return {"message": "Welcome to Colbert API"}
+    return {"message": "Welcome to Turgot API"}
 
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     try:
         logger.info(f"Processing chat request for session: {request.session_id}")
-        colbert_agent = ColbertAgent()
+        turgot_agent = TurgotAgent()
         # Generate response using chat history for context
-        answer = colbert_agent.ask_colbert(request.message, request.session_id)
+        answer = turgot_agent.ask_turgot(request.message, request.session_id)
 
         return ChatResponse(
             answer=answer,
@@ -102,7 +102,7 @@ async def export_pdf(request: ExportPDFRequest):
         response = FileResponse(
             pdf_path,
             media_type="application/pdf",
-            filename=f"colbert_chat_{request.session_id}.pdf",
+            filename=f"turgot_chat_{request.session_id}.pdf",
             background=None  # This ensures the file is deleted after sending
         )
         

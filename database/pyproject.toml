@@ -1,7 +1,7 @@
 [project]
 name = "database"
 version = "0.1.0"
-description = "Database processing for Colbert"
+description = "Database processing for Turgot"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [

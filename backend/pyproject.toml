@@ -1,5 +1,5 @@
 [project]
-name = "colbert-backend"
+name = "turgot-backend"
 version = "0.1.0"
 description = "RAG-powered chatbot for French public administration information"
 authors = [

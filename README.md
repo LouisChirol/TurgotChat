@@ -1,11 +1,11 @@
-# Colbert
+# Turgot
 
 A RAG-powered chatbot for querying French public administration procedures, laws, and official guidelines from Service-Public.fr.
-The app is available at [https://colbertchat.fr](https://colbertchat.fr/), with the main branch of the repo deployed.
+The app is available at [https://turgotchat.fr](https://turgotchat.fr/), with the main branch of the repo deployed.
 
 ## Overview
 
-Colbert provides a conversational interface to access information from Service-Public.fr and other official French government sources. The system uses RAG (Retrieval-Augmented Generation) with ChromaDB vector search and Mistral AI to provide accurate, contextual responses with source citations.
+Turgot provides a conversational interface to access information from Service-Public.fr and other official French government sources. The system uses RAG (Retrieval-Augmented Generation) with ChromaDB vector search and Mistral AI to provide accurate, contextual responses with source citations.
 
 ## Features
 
@@ -20,10 +20,10 @@ Colbert provides a conversational interface to access information from Service-P
 ## Project Structure
 
 ```
-colbert/
+turgot/
 ├── backend/             # FastAPI service with RAG pipeline
 │   ├── main.py         # FastAPI application and API endpoints
-│   ├── colbert_agent.py # Core RAG agent with LangGraph
+│   ├── turgot_agent.py # Core RAG agent with LangGraph
 │   ├── search_tool.py  # Vector search implementation
 │   ├── redis_service.py # Session management
 │   └── chroma_db/      # Vector database storage
@@ -80,7 +80,7 @@ colbert/
 
 ```bash
 git clone <repository-url>
-cd colbert
+cd turgot
 ```
 
 2. **Set up environment variables**:
@@ -124,7 +124,7 @@ docker-compose up --build
 3. **On the server, run**:
 
 ```bash
-cd ~/colbert && ./scripts/deploy.sh
+cd ~/turgot && ./scripts/deploy.sh
 ```
 
 ## Environment Variables
@@ -141,7 +141,7 @@ REDIS_URL=redis://localhost:6379
 
 ```bash
 NEXT_PUBLIC_API_URL=http://localhost:8000
-NEXT_PUBLIC_APP_NAME=Colbert
+NEXT_PUBLIC_APP_NAME=Turgot
 NEXT_PUBLIC_APP_DESCRIPTION=Assistant pour l'administration française
 ```
 

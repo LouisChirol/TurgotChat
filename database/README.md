@@ -1,6 +1,6 @@
-# Colbert Database
+# Turgot Database
 
-This directory contains the database processing and vector store management for Colbert. It handles the ingestion, processing, and storage of French public administration data from Service-Public.fr into a ChromaDB vector database for efficient semantic search and RAG operations.
+This directory contains the database processing and vector store management for Turgot. It handles the ingestion, processing, and storage of French public administration data from Service-Public.fr into a ChromaDB vector database for efficient semantic search and RAG operations.
 
 ## Overview
 
@@ -41,7 +41,7 @@ database/
 ├── parse_xml_dump_debug.py     # Debug version with detailed logging
 ├── download.py                 # Data download automation
 ├── test_vector_db.py           # Vector database testing
-├── test_colbert_vector.py      # Colbert-specific vector tests
+├── test_turgot_vector.py      # Turgot-specific vector tests
 ├── test_parse_xml.ipynb        # Interactive XML parsing notebook
 ├── pyproject.toml              # Dependencies and project config
 └── uv.lock                     # Locked dependency versions
@@ -173,8 +173,8 @@ Features:
 # Basic vector operations
 python test_vector_db.py
 
-# Colbert-specific functionality
-python test_colbert_vector.py
+# turgot-specific functionality
+python test_turgot_vector.py
 ```
 
 #### Interactive Development

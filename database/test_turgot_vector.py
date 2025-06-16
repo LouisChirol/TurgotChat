@@ -9,7 +9,7 @@ from langchain_mistralai import ChatMistralAI, MistralAIEmbeddings
 load_dotenv()
 
 
-def test_colbert_vector():
+def test_turgot_vector():
     # Initialize embeddings and vector store
     embeddings = MistralAIEmbeddings(
         model="mistral-embed", api_key=os.getenv("MISTRAL_API_KEY")
@@ -27,7 +27,7 @@ def test_colbert_vector():
     )
 
     # Create a prompt template
-    template = """Tu es Colbert, un assistant virtuel du service public français. 
+    template = """Tu es Turgot, un assistant virtuel du service public français. 
     Utilise les informations suivantes pour répondre à la question de l'utilisateur.
     Si tu ne trouves pas la réponse dans les documents fournis, dis-le clairement.
     
@@ -52,7 +52,7 @@ def test_colbert_vector():
     chain = prompt | llm
     response = chain.invoke({"context": context, "question": test_query})
 
-    print("\nRéponse de Colbert:")
+    print("\nRéponse de Turgot:")
     print(response.content)
 
     print("\nDocuments utilisés:")
@@ -63,4 +63,4 @@ def test_colbert_vector():
 
 
 if __name__ == "__main__":
-    test_colbert_vector()
+    test_turgot_vector()

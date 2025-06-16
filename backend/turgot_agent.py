@@ -8,7 +8,7 @@ from langchain_mistralai import ChatMistralAI
 from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field
 
-from colbert_prompt import COLBERT_PROMPT, OUTPUT_PROMPT
+from turgot_prompt import TURGOT_PROMPT, OUTPUT_PROMPT
 from redis_service import RedisService
 from retrieval import DocumentRetrieved, DocumentRetriever
 
@@ -27,7 +27,7 @@ WORKSPACE_ROOT = Path(__file__).parent.parent
 CHROMA_DB_PATH = WORKSPACE_ROOT / "database" / "chroma_db"
 
 
-class ColbertResponse(BaseModel):
+class TurgotResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     answer: str | None = Field(
@@ -39,7 +39,7 @@ class ColbertResponse(BaseModel):
     )
 
 
-class ColbertAgent:
+class TurgotAgent:
     def __init__(self):
         # Initialize Redis service
         self.redis_service = RedisService()
@@ -69,7 +69,7 @@ class ColbertAgent:
         text = text.replace("`", "")
         return text.strip()
 
-    def _format_response(self, response: ColbertResponse) -> str:
+    def _format_response(self, response: TurgotResponse) -> str:
         """Format the response with sources using markdown."""
         # Format the answer with proper spacing and line breaks
         formatted_answer = self._strip_code_blocks(response.answer.strip())
@@ -103,8 +103,8 @@ class ColbertAgent:
 
         return context
 
-    def ask_colbert(self, message: str, session_id: str) -> str:
-        colbert_response = ColbertResponse()
+    def ask_turgot(self, message: str, session_id: str) -> str:
+        turgot_response = TurgotResponse()
         try:
             # Get conversation history
             history = self.get_redis_history(session_id)
@@ -121,10 +121,10 @@ class ColbertAgent:
                 query, top_k=TOP_K_RETRIEVAL, max_docs=TOP_N_SOURCES
             )
             context = self._format_context(docs)
-            colbert_response.sources = [doc.sp_url for doc in docs]
+            turgot_response.sources = [doc.sp_url for doc in docs]
 
             messages = [
-                SystemMessage(content=COLBERT_PROMPT),
+                SystemMessage(content=TURGOT_PROMPT),
                 SystemMessage(content=OUTPUT_PROMPT),
                 *history_messages,  # Unpack the actual history messages
                 HumanMessage(content=message),
@@ -134,20 +134,20 @@ class ColbertAgent:
             # Generate answer using medium model
             logger.debug("Generating answer...")
             llm_response = self.llm.invoke(messages)
-            colbert_response.answer = llm_response.content
+            turgot_response.answer = llm_response.content
 
             if not docs:
-                colbert_response.answer = (
+                turgot_response.answer = (
                     "Note: Je n'ai pas trouvé d'informations spécifiques dans ma base de données "
                     "pour répondre à votre question. Je vais donc répondre en me basant sur mes "
                     "connaissances générales. Veuillez noter que cette réponse n'est pas "
                     "nécessairement spécifique au contexte français ou aux services publics français.\n\n"
-                ) + colbert_response.answer
-                colbert_response.sources = ["https://www.service-public.fr"]
+                ) + turgot_response.answer
+                turgot_response.sources = ["https://www.service-public.fr"]
 
             # Format the response
-            logger.debug(f"Response: {colbert_response}")
-            output = self._format_response(colbert_response)
+            logger.debug(f"Response: {turgot_response}")
+            output = self._format_response(turgot_response)
 
             # Store messages in history
             self.redis_service.store_message(

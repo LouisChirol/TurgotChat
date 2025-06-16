@@ -23,9 +23,9 @@ const Message = ({ role, content, sources = [], secondarySources = [], isError =
 
   const getAvatarSrc = () => {
     if (isError || content.includes("Désolé, une erreur est survenue. Veuillez réessayer.")) {
-      return '/colbert_sorry.png';
+      return '/turgot_sorry.png';
     }
-    return '/colbert_avatar.png';
+    return '/turgot_avatar.png';
   };
 
   return (
@@ -34,7 +34,7 @@ const Message = ({ role, content, sources = [], secondarySources = [], isError =
         <div className="w-12 h-12 rounded-full overflow-hidden flex-shrink-0">
           <Image
             src={getAvatarSrc()}
-            alt="Colbert Assistant"
+            alt="Turgot Assistant"
             width={48}
             height={48}
             className="w-full h-full object-cover"

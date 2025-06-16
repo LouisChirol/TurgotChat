@@ -6,7 +6,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=https://api.colbertchat.fr
+      - NEXT_PUBLIC_API_URL=https://api.turgotchat.fr
     depends_on:
       - backend
 

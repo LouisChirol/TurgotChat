@@ -21,16 +21,16 @@ from reportlab.platypus.flowables import HRFlowable
 # Initialize markdown parser
 md = MarkdownIt()
 
-def get_colbert_logo() -> str:
-    """Get the path to the Colbert logo."""
+def get_turgot_logo() -> str:
+    """Get the path to the Turgot logo."""
     # Try to find the logo in the frontend public directory
     workspace_root = Path(__file__).parent.parent
-    logo_path = workspace_root / "frontend" / "public" / "colbert_v2.png"
+    logo_path = workspace_root / "frontend" / "public" / "turgot_v2.png"
     
     if not logo_path.exists():
         # Fallback to a default logo if not found
-        logger.warning("Colbert logo not found, using default")
-        return str(workspace_root / "frontend" / "public" / "colbert_avatar.png")
+        logger.warning("Turgot logo not found, using default")
+        return str(workspace_root / "frontend" / "public" / "turgot_avatar.png")
     
     return str(logo_path)
 
@@ -137,7 +137,7 @@ def create_chat_pdf(session_id: str) -> Path:
         # Create a temporary file for the PDF
         temp_dir = Path(tempfile.gettempdir())
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        pdf_path = temp_dir / f"colbert_chat_{session_id}_{timestamp}.pdf"
+        pdf_path = temp_dir / f"turgot_chat_{session_id}_{timestamp}.pdf"
 
         # Create the PDF document
         doc = SimpleDocTemplate(
@@ -238,7 +238,7 @@ def create_chat_pdf(session_id: str) -> Path:
         story = []
         
         # Add logo and title
-        logo_path = get_colbert_logo()
+        logo_path = get_turgot_logo()
         if os.path.exists(logo_path):
             img = PILImage.open(logo_path)
             img_width, img_height = img.size
@@ -256,7 +256,7 @@ def create_chat_pdf(session_id: str) -> Path:
             spaceAfter=30,
             alignment=1  # Center alignment
         )
-        story.append(Paragraph("Conversation avec Colbert", title_style))
+        story.append(Paragraph("Conversation avec Turgot", title_style))
         story.append(Spacer(1, 20))
 
         # Add disclaimer
@@ -286,7 +286,7 @@ def create_chat_pdf(session_id: str) -> Path:
                 prefix = "Vous: "
                 style_base = 'UserMessage'
             else:
-                prefix = "Colbert: "
+                prefix = "Turgot: "
                 style_base = 'AssistantMessage'
             
             # Convert markdown to paragraphs

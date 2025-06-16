@@ -1,6 +1,6 @@
-# Colbert Frontend
+# Turgot Frontend
 
-The web interface for Colbert, built with Next.js 14 and TypeScript.
+The web interface for Turgot, built with Next.js 14 and TypeScript.
 
 ## Overview
 
@@ -67,15 +67,15 @@ The application will be available at http://localhost:3000
 ### Build Container
 
 ```bash
-docker build -t colbert-frontend .
+docker build -t turgot-frontend .
 ```
 
 ### Run Container
 
 ```bash
 docker run -p 3000:3000 \
-  -e NEXT_PUBLIC_API_URL=https://api.colbertchat.fr \
-  colbert-frontend
+  -e NEXT_PUBLIC_API_URL=https://api.turgotchat.fr \
+  turgot-frontend
 ```
 
 ### Docker Compose

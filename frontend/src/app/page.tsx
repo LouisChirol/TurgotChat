@@ -16,7 +16,7 @@ export default function Home() {
   const [messages, setMessages] = useState([
     {
       id: '1',
-      content: 'Bonjour ! Je suis Colbert, posez moi toutes vos questions sur le service public et les démarches administratives. Comment puis-je vous aider?',
+      content: 'Bonjour ! Je suis Turgot, posez moi toutes vos questions sur le service public et les démarches administratives. Comment puis-je vous aider?',
       isUser: false,
     },
   ]);
@@ -87,7 +87,7 @@ export default function Home() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `colbert_chat_${sessionId}.pdf`;
+      a.download = `turgot_chat_${sessionId}.pdf`;
       document.body.appendChild(a);
       a.click();
       
@@ -108,7 +108,7 @@ export default function Home() {
       setMessages([
         {
           id: '1',
-          content: 'Bonjour ! Je suis Colbert, posez moi toutes vos questions sur le service public et les démarches administratives. Comment puis-je vous aider?',
+          content: 'Bonjour ! Je suis Turgot, posez moi toutes vos questions sur le service public et les démarches administratives. Comment puis-je vous aider?',
           isUser: false,
         },
       ]);
@@ -123,7 +123,7 @@ export default function Home() {
     window.open('https://www.buymeacoffee.com/louischirol', '_blank');
   };
   const handleGitHub = () => {
-    window.open('https://github.com/LouisChirol/ColbertChat', '_blank');
+    window.open('https://github.com/LouisChirol/TurgotChat', '_blank');
   };
 
   return (
@@ -133,15 +133,15 @@ export default function Home() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <Image
-                src="/colbert_v2.png"
-                alt="Colbert Assistant"
+                src="/turgot_v2.png"
+                alt="Turgot Assistant"
                 width={60}
                 height={60}
                 className="rounded-full"
               />
               <div>
                 <div className="flex items-center gap-2">
-                  <h1 className="text-2xl font-bold dark:text-white">Colbert</h1>
+                  <h1 className="text-2xl font-bold dark:text-white">Turgot</h1>
                   <div className="w-6 h-4 flex overflow-hidden rounded-sm shadow-sm">
                     <div className="flex-1 bg-blue-600"></div>
                     <div className="flex-1 bg-white"></div>

@@ -17,7 +17,7 @@ interface ChatResponse {
   secondary_sources: Array<Source>;
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:8000' : 'https://api.colbertchat.fr');
+const API_URL = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:8000' : 'https://api.turgotchat.fr');
 
 export const sendMessage = async (message: string): Promise<ChatResponse> => {
   const sessionId = getSessionId();

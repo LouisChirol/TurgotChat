@@ -6,10 +6,10 @@ import './globals.css'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Colbert - Assistant Public Service',
+  title: 'Turgot - Assistant Public Service',
   description: 'Votre assistant intelligent pour les services publics français',
   icons: {
-    icon: '/colbert_avatar.png',
+    icon: '/turgot_avatar.png',
   },
 }
 

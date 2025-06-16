@@ -73,7 +73,7 @@ export function DisclaimerModal({ isOpen, onClose }: { isOpen: boolean; onClose:
           </p>
           <div className="mt-6 pt-4 border-t border-gray-200 text-center">
             <a
-              href="https://coff.ee/louischirol"
+              href="https://buymeacoffee.com/louischirol"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"

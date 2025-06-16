@@ -54,8 +54,8 @@ const ChatInterface = ({ messages, isLoading }: ChatInterfaceProps) => {
                     <div className="flex justify-start gap-3">
                         <div className="w-12 h-12 rounded-full overflow-hidden flex-shrink-0">
                             <Image
-                                src="/colbert_thinking.png"
-                                alt="Colbert Thinking"
+                                src="/turgot_thinking.png"
+                                alt="Turgot Thinking"
                                 width={48}
                                 height={48}
                                 className="w-full h-full object-cover"

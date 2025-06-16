@@ -1,6 +1,6 @@
-# Colbert Backend
+# Turgot Backend
 
-The backend service for Colbert, a RAG-powered chatbot for French public administration information. Built with FastAPI and LangChain, it provides a robust API for handling chat interactions with AI-powered responses using ChromaDB vector search and Mistral AI.
+The backend service for Turgot, a RAG-powered chatbot for French public administration information. Built with FastAPI and LangChain, it provides a robust API for handling chat interactions with AI-powered responses using ChromaDB vector search and Mistral AI.
 
 ## Overview
 
@@ -31,8 +31,8 @@ The backend service provides:
 ```
 backend/
 ├── main.py                 # FastAPI application and API endpoints
-├── colbert_agent.py        # Core RAG agent with LangGraph workflow
-├── colbert_prompt.py       # Prompt templates and prompt management
+├── turgot_agent.py        # Core RAG agent with LangGraph workflow
+├── turgot_prompt.py       # Prompt templates and prompt management
 ├── search_tool.py          # Vector search tool implementation
 ├── redis_service.py        # Redis session management service
 ├── retrieval.py           # Document retrieval and processing
@@ -123,7 +123,7 @@ Health check endpoint.
 
 ```json
 {
-  "message": "Welcome to Colbert API"
+  "message": "Welcome to Turgot API"
 }
 ```
 
@@ -179,7 +179,7 @@ TAVILY_API_KEY=your_tavily_api_key       # Web search API (optional)
 ### Build Container
 
 ```bash
-docker build -t colbert-backend .
+docker build -t turgot-backend .
 ```
 
 ### Run Container
@@ -190,7 +190,7 @@ docker run -p 8000:8000 \
   -e REDIS_URL=redis://redis:6379 \
   -v $(pwd)/logs:/app/logs \
   -v $(pwd)/database/chroma_db:/app/database/chroma_db \
-  colbert-backend
+  turgot-backend
 ```
 
 ### Docker Compose

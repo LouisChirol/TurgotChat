@@ -33,6 +33,9 @@ mkdir -p $TEMP_DIR/database
 # Copy database (only chroma_db subfolder)
 rsync -av --exclude '.git' database/chroma_db/ $TEMP_DIR/database/chroma_db/
 
+# Copy last_update.txt
+cp database/last_update.txt $TEMP_DIR/database/last_update.txt
+
 # Copy other necessary files
 cp docker-compose.yml $TEMP_DIR/
 cp scripts/setup-server.sh $TEMP_DIR/

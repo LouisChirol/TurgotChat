@@ -26,6 +26,7 @@ else:
 
 logger.info(f"Using database path: {CHROMA_DB_PATH}")
 
+
 class DocumentRetrieved(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

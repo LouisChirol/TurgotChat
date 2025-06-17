@@ -19,6 +19,7 @@ redis_url = urlparse(REDIS_URL)
 redis_host = redis_url.hostname
 redis_port = redis_url.port or 6379
 
+
 class RedisService:
     def __init__(self):
         self.redis_client = redis.Redis(
@@ -80,6 +81,7 @@ class RedisService:
         except Exception as e:
             logger.error(f"Error clearing session history: {str(e)}")
             raise
+
 
 # Create a singleton instance
 redis_service = RedisService()

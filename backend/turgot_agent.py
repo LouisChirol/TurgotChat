@@ -1,5 +1,6 @@
 import os
 import re
+import time
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -9,7 +10,7 @@ from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field
 from redis_service import RedisService
 from retrieval import DocumentRetrieved, DocumentRetriever
-from turgot_prompt import OUTPUT_PROMPT, TURGOT_PROMPT
+from turgot_prompt import CLASSIFICATION_PROMPT, OUTPUT_PROMPT, TURGOT_PROMPT
 
 load_dotenv()
 
@@ -53,6 +54,62 @@ class TurgotAgent:
             timeout=120,
             api_key=MISTRAL_API_KEY,
         )
+
+        # Initialize small model for RAG classification
+        self.classifier_llm = ChatMistralAI(
+            model="mistral-small-latest",
+            temperature=0,
+            max_retries=2,
+            api_key=MISTRAL_API_KEY,
+        )
+
+    def _needs_rag(self, message: str, history_messages: list) -> bool:
+        """Determine if the user's message requires RAG retrieval."""
+        try:
+            # Create classification messages
+            messages = [
+                SystemMessage(content=CLASSIFICATION_PROMPT),
+                HumanMessage(content=f"Question: {message}")
+            ]
+
+            # Add recent history context if available (last 2 messages max)
+            if history_messages:
+                recent_history = history_messages[-2:]
+                history_context = "\n".join([
+                    f"{msg.type}: {msg.content[:100]}..." if len(msg.content) > 100 else f"{msg.type}: {msg.content}"
+                    for msg in recent_history
+                ])
+                messages.insert(1, HumanMessage(content=f"Contexte récent: {history_context}"))
+
+            result = self.classifier_llm.invoke(messages)
+            classification = result.content.strip().upper()
+            
+            needs_rag = classification == "OUI"
+            logger.info(f"RAG classification for '{message[:50]}...': {classification} -> needs_rag={needs_rag}")
+            
+            return needs_rag
+
+        except Exception as e:
+            logger.error(f"Error in RAG classification: {str(e)}")
+            # Default to True if classification fails (safer approach)
+            logger.warning("Defaulting to RAG=True due to classification error")
+            return True
+
+    def _generate_simple_response(self, message: str, history_messages: list) -> str:
+        """Generate a response without RAG for simple queries."""
+        messages = [
+            SystemMessage(content=TURGOT_PROMPT),
+            SystemMessage(content="Tu réponds sans utiliser de documents de référence. Sois naturel et utile."),
+            *history_messages,
+            HumanMessage(content=message),
+        ]
+        
+        try:
+            response = self.llm.invoke(messages)
+            return response.content
+        except Exception as e:
+            logger.error(f"Error generating simple response: {str(e)}")
+            return "Bonjour ! Je suis Turgot, votre assistant pour les démarches administratives françaises. Comment puis-je vous aider aujourd'hui ? 😊"
 
     def get_redis_history(self, session_id: str):
         history = self.redis_service.get_history(session_id)
@@ -133,14 +190,34 @@ class TurgotAgent:
         return context
 
     def ask_turgot(self, message: str, session_id: str) -> str:
-        turgot_response = TurgotResponse()
         try:
             # Get conversation history
             history = self.get_redis_history(session_id)
-            # Extract messages from the history object
             history_messages = history.messages if hasattr(history, "messages") else []
             logger.debug(f"Messages of history: {len(history_messages)}")
 
+            # Determine if RAG is needed
+            needs_rag = self._needs_rag(message, history_messages)
+
+            if not needs_rag:
+                # Generate simple response without RAG
+                logger.info("Generating simple response without RAG")
+                answer = self._generate_simple_response(message, history_messages)
+                
+                # Store messages in history
+                self.redis_service.store_message(
+                    session_id, {"role": "user", "content": message}
+                )
+                self.redis_service.store_message(
+                    session_id, {"role": "assistant", "content": answer}
+                )
+                
+                return answer
+
+            # RAG-based response
+            logger.info("Generating RAG-based response")
+            turgot_response = TurgotResponse()
+            
             # Generate query
             query = self.retriever.generate_search_query(message, history)
             logger.debug(f"Vector db query: {query}")
@@ -162,9 +239,13 @@ class TurgotAgent:
                 HumanMessage(content=context),
             ]
             logger.critical(f"len(messages): {len(str(messages))}")
+            
             # Generate answer using medium model
             logger.debug("Generating answer...")
+            start_time = time.time()
             llm_response = self.llm.invoke(messages)
+            end_time = time.time()
+            logger.debug(f"Time taken: {end_time - start_time} seconds")
             turgot_response.answer = llm_response.content
 
             if not docs:

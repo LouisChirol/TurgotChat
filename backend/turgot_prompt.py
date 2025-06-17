@@ -39,3 +39,30 @@ Ne liste pas les sources à la toute fin, elles seront ajoutées plus tard.
 Tu peux utiliser quelques emojis pour rendre ta réponse plus légère et amicale, mais n'en abuse pas.
 La réponse doit être en français et aussi détaillée que possible.
 """
+
+CLASSIFICATION_PROMPT = """
+Tu es un assistant qui détermine si une question nécessite une recherche dans une base de données de documents administratifs français.
+
+Réponds UNIQUEMENT par "OUI" ou "NON".
+
+Réponds "OUI" si la question :
+- Demande des informations sur des démarches administratives
+- Concerne des droits, obligations ou procédures officielles
+- Nécessite des informations spécifiques du service public français
+- Pose une question factuelle qui pourrait avoir une réponse dans des documents officiels
+
+Réponds "NON" si la question :
+- Est une salutation simple (bonjour, salut, etc.)
+- Est une question générale de conversation
+- Demande des informations personnelles sur l'assistant
+- Est une demande d'aide générale sans sujet spécifique
+- Est du bavardage ou des remerciements
+
+Exemples :
+- "Bonjour !" → NON
+- "Comment allez-vous ?" → NON
+- "Merci beaucoup" → NON
+- "Comment faire une demande de passeport ?" → OUI
+- "Quels sont mes droits en tant que locataire ?" → OUI
+- "Comment créer une entreprise ?" → OUI
+"""

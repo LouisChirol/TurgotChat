@@ -6,37 +6,32 @@ WORKDIR /app
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
-    build-essential \
-    curl \
-    sqlite3 \
+    gcc \
+    g++ \
     && rm -rf /var/lib/apt/lists/*
 
-# Install uv
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
-    echo 'export PATH="/root/.cargo/bin:$PATH"' >> /root/.bashrc && \
-    . /root/.bashrc
-
 # Copy dependency files
-COPY pyproject.toml uv.lock ./
+COPY pyproject.toml ./
 
-# Create virtual environment and install dependencies
-RUN . /root/.bashrc && \
-    uv venv && \
-    . .venv/bin/activate && \
-    uv pip install -e .
+# Install uv for faster dependency management
+RUN pip install uv
 
-# Create necessary directories and set permissions
-RUN mkdir -p /app/logs /app/database/chroma_db && \
-    chmod 777 /app/logs /app/database/chroma_db
+# Install dependencies
+RUN uv pip install --system --no-cache -e .
 
-# Copy the rest of the application
-COPY . .
+# Copy application code
+COPY app/ ./app/
+COPY scripts/ ./scripts/
 
-# Add virtual environment to PATH
-ENV PATH="/app/.venv/bin:$PATH"
+# Create logs directory
+RUN mkdir -p logs
 
-# Expose the port the app runs on
+# Expose port
 EXPOSE 8000
 
-# Command to run the application
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"] 
+# Set environment variables
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+
+# Run the application
+CMD ["python", "-m", "app.api.main"] 

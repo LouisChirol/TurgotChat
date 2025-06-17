@@ -1,7 +1,7 @@
 from typing import List, Optional
 
 from langchain.tools import Tool
-from langchain.tools.tavily_search import TavilySearchResults
+from langchain_community.tools.tavily_search.tool import TavilySearchResults
 from loguru import logger
 
 

@@ -75,9 +75,16 @@ class RedisService:
     def clear_session_history(self, session_id: str) -> None:
         """Clear all messages for a given session."""
         try:
-            # Delete the chat key which contains all messages (using the same key pattern as get_session_history)
+            # Use the same logic as clear_history method
+            if session_id in self.memories:
+                self.memories[session_id].clear()
+                # Remove the session from memory cache entirely to force recreation
+                del self.memories[session_id]
+            
+            # Clear from Redis as well
             self.redis_client.delete(f"chat:{session_id}")
-            logger.info(f"Cleared history for session {session_id}")
+            
+            logger.info(f"Cleared history for session {session_id} from both Redis and memory cache")
         except Exception as e:
             logger.error(f"Error clearing session history: {str(e)}")
             raise

@@ -7,10 +7,9 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_mistralai import ChatMistralAI
 from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field
-
-from turgot_prompt import TURGOT_PROMPT, OUTPUT_PROMPT
 from redis_service import RedisService
 from retrieval import DocumentRetrieved, DocumentRetriever
+from turgot_prompt import OUTPUT_PROMPT, TURGOT_PROMPT
 
 load_dotenv()
 
@@ -69,13 +68,43 @@ class TurgotAgent:
         text = text.replace("`", "")
         return text.strip()
 
+    def _extract_sources_from_docs(self, docs: list[DocumentRetrieved]) -> list[str]:
+        """Extract valid sources from documents, filtering out None values.
+        
+        Some documents in the XML files may not have spUrl attributes, 
+        which results in None values. This method filters them out to ensure
+        only valid URLs are included in the response sources.
+        
+        The order of sources matches the order of documents as retrieved,
+        maintaining the relevance ranking from the vector search.
+        
+        Args:
+            docs: List of DocumentRetrieved objects from vector search
+            
+        Returns:
+            List of valid URL strings, filtered and ordered by relevance
+        """
+        sources = []
+        invalid_count = 0
+        for doc in docs:
+            if doc.sp_url is not None and doc.sp_url.strip():
+                sources.append(doc.sp_url)
+            else:
+                invalid_count += 1
+                logger.warning(f"Document {doc.id} has invalid sp_url: {doc.sp_url}")
+        
+        if invalid_count > 0:
+            logger.info(f"Filtered out {invalid_count} documents with invalid URLs. Valid sources: {len(sources)}")
+        
+        return sources
+
     def _format_response(self, response: TurgotResponse) -> str:
         """Format the response with sources using markdown."""
         # Format the answer with proper spacing and line breaks
         formatted_answer = self._strip_code_blocks(response.answer.strip())
 
         # Format sources as markdown links with prefix
-        if response.sources:
+        if response.sources and len(response.sources) > 0:
             sources_text = "\n\n## Fiches complètes:\n"
             sources_text += """\nNous vous recommandons de consulter les fiches complètes pour plus d'informations.
             La réponse est un résumé des informations contenues dans ces fiches, et ne doit pas être considérée comme exhaustive.\n"""
@@ -121,7 +150,9 @@ class TurgotAgent:
                 query, top_k=TOP_K_RETRIEVAL, max_docs=TOP_N_SOURCES
             )
             context = self._format_context(docs)
-            turgot_response.sources = [doc.sp_url for doc in docs]
+            
+            # Extract valid sources (filter out None values)
+            turgot_response.sources = self._extract_sources_from_docs(docs)
 
             messages = [
                 SystemMessage(content=TURGOT_PROMPT),

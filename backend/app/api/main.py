@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 from pydantic import BaseModel
 
-from app.core.agent import TurgotAgent
+from app.core.graph_agent import TurgotGraphAgent
 from app.services.pdf import PDFService
 
 
@@ -55,7 +55,7 @@ async def lifespan(app: FastAPI):
     # Startup
     global agent
     logger.info("Starting Turgot backend...")
-    agent = TurgotAgent()
+    agent = TurgotGraphAgent()
     logger.info("Turgot agent initialized")
     yield
     # Shutdown

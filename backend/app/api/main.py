@@ -4,14 +4,30 @@ from contextlib import asynccontextmanager
 from typing import Optional
 
 import uvicorn
+from app.core.graph_agent import TurgotGraphAgent
+from app.services.pdf import PDFService
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 from pydantic import BaseModel
 
-from app.core.graph_agent import TurgotGraphAgent
-from app.services.pdf import PDFService
-
+# Configure logging
+logger.remove()  # Remove default handler
+logger.add(
+    "logs/turgot_backend.log",
+    rotation="10 MB",
+    retention="30 days",
+    level="INFO",
+    format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} - {message}",
+    backtrace=True,
+    diagnose=True
+)
+# Also add console output for development/debugging
+logger.add(
+    lambda msg: print(msg, end=""),
+    level="INFO",
+    format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} - {message}"
+)
 
 # Models
 class QuestionRequest(BaseModel):

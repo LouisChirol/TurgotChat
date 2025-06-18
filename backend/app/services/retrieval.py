@@ -87,7 +87,7 @@ class DocumentRetriever:
             if hasattr(history, "messages")
             else ""
         )
-        logger.critical(f"History length: {len(history_text)}")
+        logger.debug(f"History length: {len(history_text)}")
         try:
             # Generate query and summary using structured output
             messages = [

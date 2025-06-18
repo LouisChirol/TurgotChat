@@ -21,6 +21,8 @@ services:
       - ./backend/logs:/app/logs
       - ./database/chroma_db:/app/database/chroma_db
       - ./database/last_update.txt:/app/database/last_update.txt
+    depends_on:
+      - redis
     restart: unless-stopped
 
   redis:

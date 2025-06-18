@@ -20,7 +20,8 @@ if IS_DOCKER:
     CHROMA_DB_PATH = Path("/app/database/chroma_db")
     XML_FILES_PATH = Path("/app/database")
 else:
-    WORKSPACE_ROOT = Path(__file__).parent.parent
+    # Go up from backend/app/services/ to project root
+    WORKSPACE_ROOT = Path(__file__).parent.parent.parent.parent
     CHROMA_DB_PATH = WORKSPACE_ROOT / "database" / "chroma_db"
     XML_FILES_PATH = WORKSPACE_ROOT / "database"
 
@@ -86,7 +87,7 @@ class DocumentRetriever:
             if hasattr(history, "messages")
             else ""
         )
-        logger.critical(f"History length: {len(history_text)}")
+        logger.debug(f"History length: {len(history_text)}")
         try:
             # Generate query and summary using structured output
             messages = [

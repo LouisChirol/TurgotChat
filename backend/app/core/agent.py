@@ -8,10 +8,11 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_mistralai import ChatMistralAI
 from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field
-from redis_service import RedisService
-from retrieval import DocumentRetrieved, DocumentRetriever
-from token_utils import create_message_trimmer
-from turgot_prompt import CLASSIFICATION_PROMPT, OUTPUT_PROMPT, TURGOT_PROMPT
+
+from app.core.prompts import CLASSIFICATION_PROMPT, OUTPUT_PROMPT, TURGOT_PROMPT
+from app.services.redis import RedisService
+from app.services.retrieval import DocumentRetrieved, DocumentRetriever
+from app.utils.tokens import create_message_trimmer
 
 load_dotenv()
 
@@ -28,7 +29,7 @@ MAX_TOKENS = 32000  # Mistral Medium context limit
 RESERVED_TOKENS = 8000  # Reserve for output and safety margin
 
 # Paths
-WORKSPACE_ROOT = Path(__file__).parent.parent
+WORKSPACE_ROOT = Path(__file__).parent.parent.parent
 CHROMA_DB_PATH = WORKSPACE_ROOT / "database" / "chroma_db"
 
 
@@ -207,12 +208,26 @@ class TurgotAgent:
 
         # Format sources as markdown links with prefix
         if response.sources and len(response.sources) > 0:
-            sources_text = "\n\n## Fiches complètes:\n"
-            sources_text += """\nNous vous recommandons de consulter les fiches complètes pour plus d'informations.
-            La réponse est un résumé des informations contenues dans ces fiches, et ne doit pas être considérée comme exhaustive.\n"""
-            for source in response.sources:
-                sources_text += f"- [{source}]({source})\n"
-            formatted_answer += sources_text
+            # Check if the response already contains sources section (various formats)
+            lower_answer = formatted_answer.lower()
+            has_sources_section = any(keyword in lower_answer for keyword in [
+                "## fiches complètes",
+                "## sources",
+                "### fiches complètes", 
+                "### sources",
+                "**fiches complètes**",
+                "**sources**"
+            ])
+            
+            if not has_sources_section:
+                sources_text = "\n\n## Fiches complètes:\n"
+                sources_text += """\nNous vous recommandons de consulter les fiches complètes pour plus d'informations.
+                La réponse est un résumé des informations contenues dans ces fiches, et ne doit pas être considérée comme exhaustive.\n"""
+                for source in response.sources:
+                    sources_text += f"- [{source}]({source})\n"
+                formatted_answer += sources_text
+            else:
+                logger.info("Response already contains sources section, skipping duplicate")
 
         return formatted_answer
 

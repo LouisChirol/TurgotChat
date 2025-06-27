@@ -4,12 +4,13 @@ from contextlib import asynccontextmanager
 from typing import Optional
 
 import uvicorn
-from app.core.graph_agent import TurgotGraphAgent
-from app.services.pdf import PDFService
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 from pydantic import BaseModel
+
+from app.core.graph_agent import TurgotGraphAgent
+from app.services.pdf import PDFService
 
 # Configure logging
 logger.remove()  # Remove default handler
@@ -100,16 +101,6 @@ app.add_middleware(
 async def root():
     """Health check endpoint."""
     return {"message": "Turgot API is running"}
-
-
-@app.get("/health")
-async def health():
-    """Detailed health check."""
-    return {
-        "status": "healthy",
-        "timestamp": time.time(),
-        "agent_status": "initialized" if agent else "not_initialized",
-    }
 
 
 @app.post("/chat", response_model=QuestionResponse)

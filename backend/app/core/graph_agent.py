@@ -1,8 +1,7 @@
 import os
 import re
 import time
-from pathlib import Path
-from typing import Any, List, Literal, TypedDict
+sfrom typing import Any, List, Literal
 
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -31,36 +30,38 @@ MAX_TOKENS = 32000
 RESERVED_TOKENS = 8000
 
 
-class GraphState(TypedDict):
+class GraphState(BaseModel):
     """State shared across all nodes in the graph."""
+    
+    model_config = ConfigDict(arbitrary_types_allowed=True)
     
     # Input
     message: str
     session_id: str
     
     # History and context
-    history: Any
-    history_messages: List[Any]
+    history: Any = None
+    history_messages: List[Any] = Field(default_factory=list)
     
     # Classification
-    needs_rag: bool
+    needs_rag: bool = False
     
     # RAG components
-    search_query: str
-    documents: List[DocumentRetrieved]
-    context: str
-    sources: List[str]
+    search_query: str = ""
+    documents: List[DocumentRetrieved] = Field(default_factory=list)
+    context: str = ""
+    sources: List[str] = Field(default_factory=list)
     
     # Token management
-    trimmed_history: List[Any]
-    total_tokens: int
+    trimmed_history: List[Any] = Field(default_factory=list)
+    total_tokens: int = 0
     
     # Response
-    answer: str
-    formatted_response: str
+    answer: str = ""
+    formatted_response: str = ""
     
     # Error handling
-    error: str | None
+    error: str | None = None
 
 
 class TurgotGraphAgent:
@@ -142,42 +143,40 @@ class TurgotGraphAgent:
     def _load_history(self, state: GraphState) -> GraphState:
         """Load conversation history from Redis."""
         try:
-            logger.debug(f"Loading history for session: {state['session_id']}")
+            logger.debug(f"Loading history for session: {state.session_id}")
             
-            history = self.redis_service.get_history(state["session_id"])
+            history = self.redis_service.get_history(state.session_id)
             history_messages = history.messages if hasattr(history, "messages") else []
             
             logger.debug(f"Loaded {len(history_messages)} history messages")
             
-            return {
-                **state,
+            return state.model_copy(update={
                 "history": history,
                 "history_messages": history_messages,
                 "error": None
-            }
+            })
             
         except Exception as e:
             logger.error(f"Error loading history: {str(e)}")
-            return {
-                **state,
+            return state.model_copy(update={
                 "history": None,
                 "history_messages": [],
                 "error": f"Failed to load history: {str(e)}"
-            }
+            })
     
     def _classify_query(self, state: GraphState) -> GraphState:
         """Classify whether the query needs RAG or can be answered simply."""
         try:
-            logger.debug(f"Classifying query: {state['message'][:50]}...")
+            logger.debug(f"Classifying query: {state.message[:50]}...")
             
             messages = [
                 SystemMessage(content=CLASSIFICATION_PROMPT),
-                HumanMessage(content=f"Question: {state['message']}"),
+                HumanMessage(content=f"Question: {state.message}"),
             ]
             
             # Add recent history context if available (last 2 messages max)
-            if state["history_messages"]:
-                recent_history = state["history_messages"][-2:]
+            if state.history_messages:
+                recent_history = state.history_messages[-2:]
                 history_context = "\n".join([
                     f"{msg.type}: {msg.content[:100]}..."
                     if len(msg.content) > 100
@@ -194,25 +193,23 @@ class TurgotGraphAgent:
             
             logger.info(f"Classification result: {classification} -> needs_rag={needs_rag}")
             
-            return {
-                **state,
+            return state.model_copy(update={
                 "needs_rag": needs_rag,
                 "error": None
-            }
+            })
             
         except Exception as e:
             logger.error(f"Error in classification: {str(e)}")
             # Default to RAG if classification fails (safer approach)
             logger.warning("Defaulting to RAG=True due to classification error")
-            return {
-                **state,
+            return state.model_copy(update={
                 "needs_rag": True,
                 "error": None  # Don't treat this as a fatal error
-            }
+            })
     
     def _route_after_classification(self, state: GraphState) -> Literal["simple", "rag"]:
         """Route to either simple or RAG response based on classification."""
-        return "simple" if not state["needs_rag"] else "rag"
+        return "simple" if not state.needs_rag else "rag"
     
     def _generate_simple_response(self, state: GraphState) -> GraphState:
         """Generate a simple response without RAG."""
@@ -220,7 +217,7 @@ class TurgotGraphAgent:
             logger.info("Generating simple response without RAG")
             
             # Convert history to dict format for token trimming
-            history_dicts = self._convert_to_message_dicts(state["history_messages"])
+            history_dicts = self._convert_to_message_dicts(state.history_messages)
             
             # Trim messages to fit token limit
             trimmed_history_dicts, total_tokens = self.message_trimmer.trim_messages(
@@ -239,85 +236,79 @@ class TurgotGraphAgent:
                 SystemMessage(content=TURGOT_PROMPT),
                 SystemMessage(content="Tu réponds sans utiliser de documents de référence. Sois naturel et utile."),
                 *trimmed_history,
-                HumanMessage(content=state["message"]),
+                HumanMessage(content=state.message),
             ]
             
             response = self.llm.invoke(messages)
             answer = response.content
             
-            return {
-                **state,
+            return state.model_copy(update={
                 "answer": answer,
                 "formatted_response": answer,  # For simple responses, no additional formatting needed
                 "trimmed_history": trimmed_history,
                 "total_tokens": total_tokens,
                 "error": None
-            }
+            })
             
         except Exception as e:
             logger.error(f"Error generating simple response: {str(e)}")
             fallback_answer = "Bonjour ! Je suis Turgot, votre assistant pour les démarches administratives françaises. Comment puis-je vous aider aujourd'hui ? 😊"
-            return {
-                **state,
+            return state.model_copy(update={
                 "answer": fallback_answer,
                 "formatted_response": fallback_answer,
                 "error": f"Simple response generation failed: {str(e)}"
-            }
+            })
     
     def _generate_search_query(self, state: GraphState) -> GraphState:
         """Generate a search query for RAG retrieval."""
         try:
             logger.debug("Generating search query for RAG")
             
-            query = self.retriever.generate_search_query(state["message"], state["history"])
+            query = self.retriever.generate_search_query(state.message, state.history)
             logger.debug(f"Generated search query: {query}")
             
-            return {
-                **state,
+            return state.model_copy(update={
                 "search_query": query,
                 "error": None
-            }
+            })
             
         except Exception as e:
             logger.error(f"Error generating search query: {str(e)}")
             # Fallback to original message
-            return {
-                **state,
-                "search_query": state["message"],
+            return state.model_copy(update={
+                "search_query": state.message,
                 "error": f"Search query generation failed, using original message: {str(e)}"
-            }
+            })
     
     def _retrieve_documents(self, state: GraphState) -> GraphState:
         """Retrieve documents using the search query."""
         try:
-            logger.debug(f"Retrieving documents for query: {state['search_query']}")
+            logger.debug(f"Retrieving documents for query: {state.search_query}")
             
             docs = self.retriever.retrieve_documents(
-                state["search_query"], 
+                state.search_query, 
                 top_k=TOP_K_RETRIEVAL, 
                 max_docs=TOP_N_SOURCES
             )
             
             logger.info(f"Retrieved {len(docs)} documents")
             
-            return {
-                **state,
+            return state.model_copy(update={
                 "documents": docs,
                 "error": None
-            }
+            })
             
         except Exception as e:
             logger.error(f"Error retrieving documents: {str(e)}")
-            return {
-                **state,
+            return state.model_copy(update={
                 "documents": [],
                 "error": f"Document retrieval failed: {str(e)}"
-            }
+            })
     
     def _format_context(self, state: GraphState) -> GraphState:
         """Format retrieved documents into context for the LLM."""
         try:
-            docs = state["documents"]
+            docs = state.documents
             
             if not docs:
                 context = "Aucun document pertinent n'a été trouvé pour cette question."
@@ -341,21 +332,19 @@ class TurgotGraphAgent:
             
             logger.debug(f"Formatted context with {len(sources)} sources")
             
-            return {
-                **state,
+            return state.model_copy(update={
                 "context": context,
                 "sources": sources,
                 "error": None
-            }
+            })
             
         except Exception as e:
             logger.error(f"Error formatting context: {str(e)}")
-            return {
-                **state,
+            return state.model_copy(update={
                 "context": "Erreur lors du formatage du contexte.",
                 "sources": [],
                 "error": f"Context formatting failed: {str(e)}"
-            }
+            })
     
     def _generate_rag_response(self, state: GraphState) -> GraphState:
         """Generate response using RAG context."""
@@ -369,16 +358,16 @@ class TurgotGraphAgent:
             ]
             
             # Convert history to dict format for token trimming
-            history_dicts = self._convert_to_message_dicts(state["history_messages"])
+            history_dicts = self._convert_to_message_dicts(state.history_messages)
             
             # Add current user message to history for trimming calculation
-            all_messages = history_dicts + [{"role": "user", "content": state["message"]}]
+            all_messages = history_dicts + [{"role": "user", "content": state.message}]
             
             # Trim messages to fit token limit
             trimmed_messages, total_tokens = self.message_trimmer.trim_messages(
                 all_messages, 
                 system_messages=system_messages, 
-                context_text=state["context"]
+                context_text=state.context
             )
             
             # Convert back to LangChain format and reconstruct message list
@@ -391,8 +380,8 @@ class TurgotGraphAgent:
                 SystemMessage(content=TURGOT_PROMPT),
                 SystemMessage(content=OUTPUT_PROMPT),
                 *trimmed_langchain,  # Use trimmed history
-                HumanMessage(content=state["message"]),
-                HumanMessage(content=state["context"]),
+                HumanMessage(content=state.message),
+                HumanMessage(content=state.context),
             ]
             
             logger.info(f"RAG response: using {total_tokens} tokens ({len(trimmed_messages)} trimmed messages)")
@@ -407,7 +396,7 @@ class TurgotGraphAgent:
             answer = llm_response.content
             
             # Handle case where no documents were found
-            if not state["documents"]:
+            if not state.documents:
                 answer = (
                     "Note: Je n'ai pas trouvé d'informations spécifiques dans ma base de données "
                     "pour répondre à votre question. Je vais donc répondre en me basant sur mes "
@@ -415,28 +404,26 @@ class TurgotGraphAgent:
                     "nécessairement spécifique au contexte français ou aux services publics français.\n\n"
                 ) + answer
             
-            return {
-                **state,
+            return state.model_copy(update={
                 "answer": answer,
                 "trimmed_history": trimmed_langchain,
                 "total_tokens": total_tokens,
                 "error": None
-            }
+            })
             
         except Exception as e:
             logger.error(f"Error generating RAG response: {str(e)}")
             fallback_answer = "Désolé, une erreur est survenue lors de la génération de la réponse."
-            return {
-                **state,
+            return state.model_copy(update={
                 "answer": fallback_answer,
                 "error": f"RAG response generation failed: {str(e)}"
-            }
+            })
     
     def _format_response(self, state: GraphState) -> GraphState:
         """Format the final response with sources."""
         try:
-            answer = state["answer"]
-            sources = state.get("sources", [])
+            answer = state.answer
+            sources = state.sources
             
             # Strip code blocks
             formatted_answer = self._strip_code_blocks(answer.strip())
@@ -464,22 +451,20 @@ class TurgotGraphAgent:
                     logger.info("Response already contains sources section, skipping duplicate")
             
             # If no sources found, add service-public.fr as fallback
-            elif not state.get("documents"):
+            elif not state.documents:
                 formatted_answer += "\n\n## Sources:\n- [https://www.service-public.fr](https://www.service-public.fr)\n"
             
-            return {
-                **state,
+            return state.model_copy(update={
                 "formatted_response": formatted_answer,
                 "error": None
-            }
+            })
             
         except Exception as e:
             logger.error(f"Error formatting response: {str(e)}")
-            return {
-                **state,
-                "formatted_response": state.get("answer", "Erreur lors du formatage de la réponse."),
+            return state.model_copy(update={
+                "formatted_response": state.answer or "Erreur lors du formatage de la réponse.",
                 "error": f"Response formatting failed: {str(e)}"
-            }
+            })
     
     def _store_messages(self, state: GraphState) -> GraphState:
         """Store the conversation messages in Redis."""
@@ -488,31 +473,29 @@ class TurgotGraphAgent:
             
             # Store user message
             self.redis_service.store_message(
-                state["session_id"], 
-                {"role": "user", "content": state["message"]}
+                state.session_id, 
+                {"role": "user", "content": state.message}
             )
             
             # Store assistant response
-            response_to_store = state.get("formatted_response", state.get("answer", ""))
+            response_to_store = state.formatted_response or state.answer or ""
             self.redis_service.store_message(
-                state["session_id"],
+                state.session_id,
                 {"role": "assistant", "content": response_to_store}
             )
             
             logger.debug("Messages stored successfully")
             
-            return {
-                **state,
+            return state.model_copy(update={
                 "error": None
-            }
+            })
             
         except Exception as e:
             logger.error(f"Error storing messages: {str(e)}")
             # Don't fail the entire flow if storage fails
-            return {
-                **state,
+            return state.model_copy(update={
                 "error": f"Message storage failed: {str(e)}"
-            }
+            })
     
     def _convert_to_message_dicts(self, langchain_messages: list) -> list[dict]:
         """Convert LangChain messages to simple dictionaries for token counting."""
@@ -561,22 +544,10 @@ class TurgotGraphAgent:
             logger.info(f"Processing request for session {session_id}: {message[:50]}...")
             
             # Initialize state
-            initial_state: GraphState = {
-                "message": message,
-                "session_id": session_id,
-                "history": None,
-                "history_messages": [],
-                "needs_rag": False,
-                "search_query": "",
-                "documents": [],
-                "context": "",
-                "sources": [],
-                "trimmed_history": [],
-                "total_tokens": 0,
-                "answer": "",
-                "formatted_response": "",
-                "error": None
-            }
+            initial_state = GraphState(
+                message=message,
+                session_id=session_id
+            )
             
             # Execute the graph
             result = self.graph.invoke(initial_state)

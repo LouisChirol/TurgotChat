@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import DataSourceIndicator from './DataSourceIndicator';
 
 interface Source {
   url: string;
@@ -28,6 +29,60 @@ const Message = ({ role, content, sources = [], secondarySources = [], isError =
     return '/turgot_avatar.png';
   };
 
+  // Helper function to categorize sources by type with deduplication
+  const categorizeSources = (sources: Source[]) => {
+    // First, identify all sources by their base URL (without query parameters)
+    const sourceMap = new Map<string, Source>();
+    
+    sources.forEach(source => {
+      const baseUrl = source.url.split('?')[0]; // Remove query parameters for comparison
+      
+      // If this URL is already in the map, prioritize entreprendre over vosdroits
+      if (sourceMap.has(baseUrl)) {
+        const existingSource = sourceMap.get(baseUrl)!;
+        const existingIsEntreprendre = existingSource.url.includes('entreprendre');
+        const currentIsEntreprendre = source.url.includes('entreprendre');
+        
+        // Keep the entreprendre version if either is entreprendre
+        if (currentIsEntreprendre && !existingIsEntreprendre) {
+          sourceMap.set(baseUrl, source);
+        }
+      } else {
+        sourceMap.set(baseUrl, source);
+      }
+    });
+    
+    // Now categorize the deduplicated sources
+    const deduplicatedSources = Array.from(sourceMap.values());
+    const entreprendreSources = deduplicatedSources.filter(s => s.url.includes('entreprendre'));
+    const vosdroitsSources = deduplicatedSources.filter(s => s.url.includes('vosdroits') && !s.url.includes('entreprendre'));
+    const otherSources = deduplicatedSources.filter(s => !s.url.includes('vosdroits') && !s.url.includes('entreprendre'));
+    
+    // After deduplication, show both types of sources
+    // The deduplication already removed duplicates, so we can show both
+    return { 
+      vosdroitsSources, 
+      entreprendreSources, 
+      otherSources 
+    };
+  };
+
+  // Extract sources from markdown content if they're embedded in the response
+  const extractSourcesFromContent = (content: string) => {
+    const sourceMatches = content.match(/\[([^\]]+)\]\(([^)]+)\)/g);
+    if (sourceMatches) {
+      return sourceMatches.map(match => {
+        const [, title, url] = match.match(/\[([^\]]+)\]\(([^)]+)\)/) || [];
+        return { url, title: title || url, excerpt: '' };
+      });
+    }
+    return [];
+  };
+
+  // Get all sources (from props and embedded in content)
+  const allSources = [...sources, ...extractSourcesFromContent(content)];
+  const { vosdroitsSources, entreprendreSources, otherSources } = categorizeSources(allSources);
+
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} gap-3`}>
       {!isUser && (
@@ -50,6 +105,13 @@ const Message = ({ role, content, sources = [], secondarySources = [], isError =
             : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
         } transition-colors duration-200`}
       >
+        {/* Data Source Indicators for Assistant Messages */}
+        {!isUser && allSources.length > 0 && (
+          <div className="mb-3">
+            <DataSourceIndicator sources={allSources} />
+          </div>
+        )}
+
         <div className={`prose prose-sm max-w-none ${isUser ? 'prose-invert' : 'prose-gray dark:prose-invert'}`}>
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
@@ -101,7 +163,9 @@ const Message = ({ role, content, sources = [], secondarySources = [], isError =
             {content}
           </ReactMarkdown>
         </div>
-        {sources.length > 0 && (
+        
+        {/* Enhanced Sources Display */}
+        {(vosdroitsSources.length > 0 || entreprendreSources.length > 0 || otherSources.length > 0 || secondarySources.length > 0) && (
           <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600">
             <details className="group">
               <summary className="flex items-center gap-2 cursor-pointer text-sm font-semibold text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
@@ -113,61 +177,123 @@ const Message = ({ role, content, sources = [], secondarySources = [], isError =
                 >
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
-                Sources principales ({sources.length})
+                Sources ({vosdroitsSources.length + entreprendreSources.length + otherSources.length + secondarySources.length})
               </summary>
-              <ul className="mt-2 space-y-3 pl-6">
-                {sources.map((source, index) => (
-                  <li key={index} className="text-sm break-words">
-                    <a
-                      href={source.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline truncate block max-w-full"
-                      title={source.url}
-                    >
-                      {source.url.length > 60 ? `${source.url.substring(0, 60)}...` : source.url}
-                    </a>
-                    {source.excerpt && (
-                      <p className="text-gray-600 dark:text-gray-400 mt-1 break-words text-sm">{source.excerpt}</p>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </details>
+              
+              <div className="mt-2 space-y-4 pl-6">
+                {/* Sources pour particuliers */}
+                {vosdroitsSources.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2 flex items-center gap-2">
+                      <span className="text-lg">👤</span>
+                      Sources pour particuliers ({vosdroitsSources.length})
+                    </h4>
+                    <ul className="space-y-2">
+                      {vosdroitsSources.map((source, index) => (
+                        <li key={index} className="text-sm break-words">
+                          <a
+                            href={source.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline truncate block max-w-full"
+                            title={source.url}
+                          >
+                            {source.title || (source.url.length > 60 ? `${source.url.substring(0, 60)}...` : source.url)}
+                          </a>
+                          {source.excerpt && (
+                            <p className="text-gray-600 dark:text-gray-400 mt-1 break-words text-xs">{source.excerpt}</p>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
 
-            {secondarySources.length > 0 && (
-              <details className="group mt-3">
-                <summary className="flex items-center gap-2 cursor-pointer text-sm font-semibold text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-                  <svg
-                    className="w-4 h-4 transform group-open:rotate-90 transition-transform"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                  Sources complémentaires ({secondarySources.length})
-                </summary>
-                <ul className="mt-2 space-y-3 pl-6">
-                  {secondarySources.map((source, index) => (
-                    <li key={index} className="text-sm break-words">
-                      <a
-                        href={source.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 hover:underline truncate block max-w-full"
-                        title={source.url}
-                      >
-                        {source.url.length > 60 ? `${source.url.substring(0, 60)}...` : source.url}
-                      </a>
-                      {source.excerpt && (
-                        <p className="text-gray-500 dark:text-gray-400 mt-1 break-words text-sm">{source.excerpt}</p>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            )}
+                {/* Sources pour professionnels */}
+                {entreprendreSources.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2 flex items-center gap-2">
+                      <span className="text-lg">💼</span>
+                      Sources pour professionnels ({entreprendreSources.length})
+                    </h4>
+                    <ul className="space-y-2">
+                      {entreprendreSources.map((source, index) => (
+                        <li key={index} className="text-sm break-words">
+                          <a
+                            href={source.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline truncate block max-w-full"
+                            title={source.url}
+                          >
+                            {source.title || (source.url.length > 60 ? `${source.url.substring(0, 60)}...` : source.url)}
+                          </a>
+                          {source.excerpt && (
+                            <p className="text-gray-600 dark:text-gray-400 mt-1 break-words text-xs">{source.excerpt}</p>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Autres sources */}
+                {otherSources.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2 flex items-center gap-2">
+                      <span className="text-lg">📄</span>
+                      Autres sources ({otherSources.length})
+                    </h4>
+                    <ul className="space-y-2">
+                      {otherSources.map((source, index) => (
+                        <li key={index} className="text-sm break-words">
+                          <a
+                            href={source.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline truncate block max-w-full"
+                            title={source.url}
+                          >
+                            {source.title || (source.url.length > 60 ? `${source.url.substring(0, 60)}...` : source.url)}
+                          </a>
+                          {source.excerpt && (
+                            <p className="text-gray-600 dark:text-gray-400 mt-1 break-words text-xs">{source.excerpt}</p>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Sources complémentaires */}
+                {secondarySources.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+                      <span className="text-lg">🔗</span>
+                      Sources complémentaires ({secondarySources.length})
+                    </h4>
+                    <ul className="space-y-2">
+                      {secondarySources.map((source, index) => (
+                        <li key={index} className="text-sm break-words">
+                          <a
+                            href={source.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 hover:underline truncate block max-w-full"
+                            title={source.url}
+                          >
+                            {source.title || (source.url.length > 60 ? `${source.url.substring(0, 60)}...` : source.url)}
+                          </a>
+                          {source.excerpt && (
+                            <p className="text-gray-500 dark:text-gray-400 mt-1 break-words text-xs">{source.excerpt}</p>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </details>
           </div>
         )}
       </div>

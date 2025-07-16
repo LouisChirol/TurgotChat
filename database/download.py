@@ -14,6 +14,14 @@ stable_urls = {
         "https://www.data.gouv.fr/fr/datasets/r/d1b0f744-c997-48d2-9ec4-1c64e82202d6",
         "data/service-public",
     ),
+    "entreprendre": (
+        "https://www.data.gouv.fr/fr/datasets/r/93c81767-6ae6-4b31-8dd7-2158e560d181",
+        "data/service-public/entreprendre-latest",
+    ),
+    "schema_entreprendre": (
+        "https://www.data.gouv.fr/fr/datasets/r/0c56e5ae-e047-45dc-953a-f8b41e0d533e",
+        "data/service-public",
+    ),
 }
 
 

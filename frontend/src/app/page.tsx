@@ -4,27 +4,83 @@ import AppDrawer from '@/components/AppDrawer';
 import ChatInput from '@/components/ChatInput';
 import ChatInterface from '@/components/ChatInterface';
 import ConfirmationModal from '@/components/ConfirmationModal';
+import DataSourceFilter, { DataSourceType } from '@/components/DataSourceFilter';
 import { DarkModeButton, DisclaimerModal, InfoButton } from '@/components/Disclaimer';
 import SupportButton from '@/components/SupportButton';
 import { clearSession, sendMessage } from '@/services/api';
 import { getSessionId } from '@/services/session';
 import { Bars3Icon } from '@heroicons/react/24/outline';
 import Image from 'next/image';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 export default function Home() {
   const [messages, setMessages] = useState([
     {
       id: '1',
-      content: 'Bonjour ! Je suis Turgot, posez moi toutes vos questions sur le service public et les démarches administratives. Comment puis-je vous aider?',
+      content: 'Bonjour ! Je suis Turgot, votre assistant pour les démarches administratives françaises. 🏛️\n\nJe peux vous aider avec :\n\n- **👤 Les droits des particuliers** ([vosdroits.service-public.fr](https://vosdroits.service-public.fr))\n- **💼 Les démarches pour professionnels** ([entreprendre.service-public.fr](https://entreprendre.service-public.fr))\n\nUtilisez le filtre en haut à droite pour afficher uniquement les informations qui vous concernent !\n\nComment puis-je vous aider aujourd\'hui ?',
       isUser: false,
     },
   ]);
   const [isLoading, setIsLoading] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
-  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   const [isDisclaimerOpen, setIsDisclaimerOpen] = useState(false);
+  const [dataSourceFilter, setDataSourceFilter] = useState<DataSourceType>('all');
+
+  // Clear session history on page load/refresh for privacy
+  useEffect(() => {
+    const clearHistoryOnLoad = async () => {
+      try {
+        const sessionId = getSessionId();
+        if (sessionId) {
+          // Clear the previous session from backend
+          await clearSession();
+        }
+        // Generate a new session ID
+        const newSessionId = crypto.randomUUID();
+        localStorage.setItem('turgot_session_id', newSessionId);
+        localStorage.setItem('turgot_last_activity', Date.now().toString());
+      } catch (error) {
+        console.error('Error clearing history on load:', error);
+      }
+    };
+    
+    clearHistoryOnLoad();
+  }, []);
+
+  // Filter messages based on data source filter
+  const filteredMessages = useMemo(() => {
+    if (dataSourceFilter === 'all') return messages;
+
+    return messages.map(message => {
+      if (message.isUser) return message;
+
+      // Extract sources from message content
+      const sourceMatches = message.content.match(/\[([^\]]+)\]\(([^)]+)\)/g);
+      const sources = sourceMatches ? sourceMatches.map(match => {
+        const [, title, url] = match.match(/\[([^\]]+)\]\(([^)]+)\)/) || [];
+        return { url, title: title || url };
+      }) : [];
+
+      // Check if message has sources matching the filter
+      const hasMatchingSources = sources.some(source => {
+        if (dataSourceFilter === 'particuliers') {
+          return source.url.includes('vosdroits');
+        } else if (dataSourceFilter === 'professionnels') {
+          return source.url.includes('entreprendre');
+        }
+        return false;
+      });
+
+      // If no sources or no matching sources, hide the message
+      if (sources.length === 0 || !hasMatchingSources) {
+        return { ...message, content: '**Message filtré** - Cette réponse ne contient pas de sources pour le type sélectionné.' };
+      }
+
+      return message;
+    });
+  }, [messages, dataSourceFilter]);
 
   const handleSendMessage = async (message: string) => {
     if (!message.trim()) return;
@@ -68,7 +124,11 @@ export default function Home() {
 
     setIsExporting(true);
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/export-pdf`, {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const requestUrl = `${apiUrl}/generate-pdf`;
+      
+      // First, request PDF generation
+      const response = await fetch(requestUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -77,11 +137,30 @@ export default function Home() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to export PDF');
+        const errorText = await response.text();
+        console.error('Response error text:', errorText);
+        throw new Error(`Failed to export PDF: ${response.status} ${response.statusText}`);
       }
 
-      // Get the blob from the response
-      const blob = await response.blob();
+      // Get the PDF URL from the JSON response
+      const data = await response.json();
+      const pdfUrl = data.pdf_url;
+      
+      if (!pdfUrl) {
+        throw new Error('No PDF URL received');
+      }
+
+      const fullPdfUrl = `${apiUrl}${pdfUrl}`;
+
+      // Download the actual PDF file
+      const pdfResponse = await fetch(fullPdfUrl);
+      
+      if (!pdfResponse.ok) {
+        throw new Error('Failed to download PDF');
+      }
+
+      // Get the blob from the PDF response
+      const blob = await pdfResponse.blob();
       
       // Create a download link
       const url = window.URL.createObjectURL(blob);
@@ -104,11 +183,19 @@ export default function Home() {
 
   const handleReset = async () => {
     try {
+      // Clear the current session from the backend
       await clearSession();
+      
+      // Generate a new session ID to ensure complete privacy
+      const newSessionId = crypto.randomUUID();
+      localStorage.setItem('turgot_session_id', newSessionId);
+      localStorage.setItem('turgot_last_activity', Date.now().toString());
+      
+      // Reset the UI to show only the welcome message
       setMessages([
         {
           id: '1',
-          content: 'Bonjour ! Je suis Turgot, posez moi toutes vos questions sur le service public et les démarches administratives. Comment puis-je vous aider?',
+          content: 'Bonjour ! Je suis Turgot, votre assistant pour les démarches administratives françaises. 🏛️\n\nJe peux vous aider avec :\n\n- **👤 Les droits des particuliers** ([vosdroits.service-public.fr](https://vosdroits.service-public.fr))\n- **💼 Les démarches pour professionnels** ([entreprendre.service-public.fr](https://entreprendre.service-public.fr))\n\nUtilisez le filtre en haut à droite pour afficher uniquement les informations qui vous concernent !\n\nComment puis-je vous aider aujourd\'hui ?',
           isUser: false,
         },
       ]);
@@ -152,6 +239,11 @@ export default function Home() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <DataSourceFilter 
+                activeFilter={dataSourceFilter}
+                onFilterChange={setDataSourceFilter}
+                className="hidden sm:block"
+              />
               <InfoButton onClick={() => setIsDisclaimerOpen(true)} />
               <DarkModeButton />
               <button
@@ -163,13 +255,20 @@ export default function Home() {
               </button>
             </div>
           </div>
+          {/* Mobile data source filter */}
+          <div className="mt-3 sm:hidden">
+            <DataSourceFilter 
+              activeFilter={dataSourceFilter}
+              onFilterChange={setDataSourceFilter}
+            />
+          </div>
         </div>
       </header>
 
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="flex-1 overflow-y-auto">
           <div className="max-w-4xl mx-auto px-4 py-4">
-            <ChatInterface messages={messages} isLoading={isLoading} />
+            <ChatInterface messages={filteredMessages} isLoading={isLoading} />
           </div>
         </div>
 
@@ -200,16 +299,19 @@ export default function Home() {
         disableClear={isLoading || messages.length <= 1}
       />
 
-      <DisclaimerModal isOpen={isDisclaimerOpen} onClose={() => setIsDisclaimerOpen(false)} />
-
       <ConfirmationModal
         isOpen={isResetModalOpen}
         onClose={() => setIsResetModalOpen(false)}
         onConfirm={handleReset}
-        title="Vider la discussion"
-        message="Attention : cette action va réinitialiser la discussion et le contenu actuel sera définitivement perdu. Êtes-vous sûr de vouloir continuer ?"
-        confirmText="Vider la discussion"
+        title="Réinitialiser la conversation"
+        message="Êtes-vous sûr de vouloir effacer toute l'historique de la conversation ? Cette action ne peut pas être annulée."
+        confirmText="Réinitialiser"
         cancelText="Annuler"
+      />
+
+      <DisclaimerModal
+        isOpen={isDisclaimerOpen}
+        onClose={() => setIsDisclaimerOpen(false)}
       />
     </main>
   );

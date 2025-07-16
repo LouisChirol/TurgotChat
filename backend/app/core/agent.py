@@ -3,16 +3,18 @@ import re
 import time
 from pathlib import Path
 
+from app.core.prompts import (CLASSIFICATION_PROMPT,
+                              NON_ADMINISTRATIVE_RESPONSE_PROMPT,
+                              OUTPUT_PROMPT, RAG_CLASSIFICATION_PROMPT,
+                              TURGOT_PROMPT)
+from app.services.redis import RedisService
+from app.services.retrieval import DocumentRetrieved, DocumentRetriever
+from app.utils.tokens import create_message_trimmer
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_mistralai import ChatMistralAI
 from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field
-
-from app.core.prompts import CLASSIFICATION_PROMPT, OUTPUT_PROMPT, TURGOT_PROMPT
-from app.services.redis import RedisService
-from app.services.retrieval import DocumentRetrieved, DocumentRetriever
-from app.utils.tokens import create_message_trimmer
 
 load_dotenv()
 
@@ -21,8 +23,8 @@ if not MISTRAL_API_KEY:
     raise ValueError("MISTRAL_API_KEY environment variable is not set")
 
 # RAG parameters
-TOP_K_RETRIEVAL = 15
-TOP_N_SOURCES = 4
+TOP_K_RETRIEVAL = 20
+TOP_N_SOURCES = 8
 
 # Token limits
 MAX_TOKENS = 32000  # Mistral Medium context limit
@@ -74,12 +76,12 @@ class TurgotAgent:
             api_key=MISTRAL_API_KEY,
         )
 
-    def _needs_rag(self, message: str, history_messages: list) -> bool:
-        """Determine if the user's message requires RAG retrieval."""
+    def _needs_rag_for_administrative_question(self, message: str, history_messages: list) -> bool:
+        """Determine if an administrative question requires RAG retrieval."""
         try:
             # Create classification messages
             messages = [
-                SystemMessage(content=CLASSIFICATION_PROMPT),
+                SystemMessage(content=RAG_CLASSIFICATION_PROMPT),
                 HumanMessage(content=f"Question: {message}"),
             ]
 
@@ -103,7 +105,7 @@ class TurgotAgent:
 
             needs_rag = classification == "OUI"
             logger.info(
-                f"RAG classification for '{message[:50]}...': {classification} -> needs_rag={needs_rag}"
+                f"RAG classification for administrative question '{message[:50]}...': {classification} -> needs_rag={needs_rag}"
             )
 
             return needs_rag
@@ -114,23 +116,31 @@ class TurgotAgent:
             logger.warning("Defaulting to RAG=True due to classification error")
             return True
 
-    def _generate_simple_response(self, message: str, history_messages: list) -> str:
-        """Generate a response without RAG for simple queries."""
-        messages = [
-            SystemMessage(content=TURGOT_PROMPT),
-            SystemMessage(
-                content="Tu réponds sans utiliser de documents de référence. Sois naturel et utile."
-            ),
-            *history_messages,
-            HumanMessage(content=message),
-        ]
 
+    
+    def _is_non_administrative_question(self, message: str) -> bool:
+        """Determine if a question is non-administrative."""
         try:
-            response = self.llm.invoke(messages)
-            return response.content
+            # Create classification messages
+            messages = [
+                SystemMessage(content=CLASSIFICATION_PROMPT),
+                HumanMessage(content=f"Question: {message}"),
+            ]
+            
+            result = self.classifier_llm.invoke(messages)
+            classification = result.content.strip().upper()
+            
+            # If classification says "NON", it's non-administrative
+            is_non_administrative = classification == "NON"
+            logger.info(f"Non-administrative classification for '{message[:50]}...': {classification} -> is_non_administrative={is_non_administrative}")
+            
+            return is_non_administrative
+            
         except Exception as e:
-            logger.error(f"Error generating simple response: {str(e)}")
-            return "Bonjour ! Je suis Turgot, votre assistant pour les démarches administratives françaises. Comment puis-je vous aider aujourd'hui ? 😊"
+            logger.error(f"Error in non-administrative classification: {str(e)}")
+            # Default to False if classification fails (safer approach)
+            logger.warning("Defaulting to administrative=True due to classification error")
+            return False
 
     def _convert_to_message_dicts(self, langchain_messages: list) -> list[dict]:
         """Convert LangChain messages to simple dictionaries for token counting."""
@@ -206,29 +216,6 @@ class TurgotAgent:
         # Format the answer with proper spacing and line breaks
         formatted_answer = self._strip_code_blocks(response.answer.strip())
 
-        # Format sources as markdown links with prefix
-        if response.sources and len(response.sources) > 0:
-            # Check if the response already contains sources section (various formats)
-            lower_answer = formatted_answer.lower()
-            has_sources_section = any(keyword in lower_answer for keyword in [
-                "## fiches complètes",
-                "## sources",
-                "### fiches complètes", 
-                "### sources",
-                "**fiches complètes**",
-                "**sources**"
-            ])
-            
-            if not has_sources_section:
-                sources_text = "\n\n## Fiches complètes:\n"
-                sources_text += """\nNous vous recommandons de consulter les fiches complètes pour plus d'informations.
-                La réponse est un résumé des informations contenues dans ces fiches, et ne doit pas être considérée comme exhaustive.\n"""
-                for source in response.sources:
-                    sources_text += f"- [{source}]({source})\n"
-                formatted_answer += sources_text
-            else:
-                logger.info("Response already contains sources section, skipping duplicate")
-
         return formatted_answer
 
     def _format_context(self, docs: list[DocumentRetrieved]) -> str:
@@ -238,11 +225,37 @@ class TurgotAgent:
 
         context = "CONTEXTE - Documents officiels trouvés :\n\n"
 
-        for doc in docs:
-            context += f"Document {doc.id} (URL: {doc.sp_url}):\n"
-            context += "Extraits pertinents:\n"
-            context += f"{doc.page_content}\n"
-            context += "---\n\n"
+        # Group documents by data source for better organization
+        vosdroits_docs = [doc for doc in docs if doc.data_source == "vosdroits"]
+        entreprendre_docs = [doc for doc in docs if doc.data_source == "entreprendre"]
+        other_docs = [doc for doc in docs if doc.data_source not in ["vosdroits", "entreprendre"]]
+
+        # Add documents from vosdroits (particuliers)
+        if vosdroits_docs:
+            context += "👤 DOCUMENTS POUR PARTICULIERS (vosdroits) :\n"
+            for doc in vosdroits_docs:
+                context += f"Document {doc.id} (URL: {doc.sp_url}):\n"
+                context += "Extraits pertinents:\n"
+                context += f"{doc.page_content}\n"
+                context += "---\n\n"
+
+        # Add documents from entreprendre (professionnels)
+        if entreprendre_docs:
+            context += "💼 DOCUMENTS POUR PROFESSIONNELS (entreprendre) :\n"
+            for doc in entreprendre_docs:
+                context += f"Document {doc.id} (URL: {doc.sp_url}):\n"
+                context += "Extraits pertinents:\n"
+                context += f"{doc.page_content}\n"
+                context += "---\n\n"
+
+        # Add other documents if any
+        if other_docs:
+            context += "📄 AUTRES DOCUMENTS :\n"
+            for doc in other_docs:
+                context += f"Document {doc.id} (URL: {doc.sp_url}):\n"
+                context += "Extraits pertinents:\n"
+                context += f"{doc.page_content}\n"
+                context += "---\n\n"
 
         context += "INSTRUCTION: Basez votre réponse UNIQUEMENT sur les informations contenues dans ces documents. "
         context += "Si les documents contiennent des informations contradictoires ou incomplètes, mentionnez-le clairement."
@@ -256,12 +269,42 @@ class TurgotAgent:
             history_messages = history.messages if hasattr(history, "messages") else []
             logger.debug(f"Messages of history: {len(history_messages)}")
 
-            # Determine if RAG is needed
-            needs_rag = self._needs_rag(message, history_messages)
+            # STEP 1: First check if it's administrative (in scope) vs non-administrative (out of scope)
+            is_non_administrative = self._is_non_administrative_question(message)
+            
+            if is_non_administrative:
+                # Generate out-of-scope response
+                logger.info("Generating out-of-scope response for non-administrative question")
+                
+                # Use the non-administrative response prompt
+                prompt = NON_ADMINISTRATIVE_RESPONSE_PROMPT.format(question=message)
+                messages = [
+                    SystemMessage(content=prompt),
+                ]
+                
+                try:
+                    response = self.llm.invoke(messages)
+                    answer = response.content
+                except Exception as e:
+                    logger.error(f"Error generating out-of-scope response: {str(e)}")
+                    answer = "Bonjour ! Je suis Turgot, votre assistant pour les démarches administratives françaises. Comment puis-je vous aider aujourd'hui ? 😊"
+                
+                # Store messages in history
+                self.redis_service.store_message(
+                    session_id, {"role": "user", "content": message}
+                )
+                self.redis_service.store_message(
+                    session_id, {"role": "assistant", "content": answer}
+                )
+                
+                return answer
+
+            # STEP 2: If administrative, determine if RAG is needed
+            needs_rag = self._needs_rag_for_administrative_question(message, history_messages)
 
             if not needs_rag:
                 # Generate simple response without RAG
-                logger.info("Generating simple response without RAG")
+                logger.info("Generating simple administrative response without RAG")
 
                 # Convert history to dict format for token trimming
                 history_dicts = self._convert_to_message_dicts(history_messages)
@@ -284,7 +327,22 @@ class TurgotAgent:
                     f"Simple response: using {total_tokens} tokens ({len(trimmed_history)} messages)"
                 )
 
-                answer = self._generate_simple_response(message, trimmed_history)
+                # Generate normal administrative response
+                messages = [
+                    SystemMessage(content=TURGOT_PROMPT),
+                    SystemMessage(
+                        content="Tu réponds sans utiliser de documents de référence. Sois naturel et utile."
+                    ),
+                    *trimmed_history,
+                    HumanMessage(content=message),
+                ]
+
+                try:
+                    response = self.llm.invoke(messages)
+                    answer = response.content
+                except Exception as e:
+                    logger.error(f"Error generating simple response: {str(e)}")
+                    answer = "Bonjour ! Je suis Turgot, votre assistant pour les démarches administratives françaises. Comment puis-je vous aider aujourd'hui ? 😊"
 
                 # Store messages in history
                 self.redis_service.store_message(
@@ -296,7 +354,7 @@ class TurgotAgent:
 
                 return answer
 
-            # RAG-based response
+            # STEP 3: RAG-based response
             logger.info("Generating RAG-based response")
             turgot_response = TurgotResponse()
 

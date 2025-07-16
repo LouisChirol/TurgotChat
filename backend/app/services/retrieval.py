@@ -37,6 +37,7 @@ class DocumentRetrieved(BaseModel):
     )
     sp_url: str | None = Field(description="L'URL du document", default=None)
     page_content: str | None = Field(description="Le contenu du document", default=None)
+    data_source: str | None = Field(description="La source des données (vosdroits/entreprendre)", default=None)
 
 
 class DocumentRetriever:
@@ -116,6 +117,7 @@ class DocumentRetriever:
             source_file=doc1.source_file,
             sp_url=doc1.sp_url,
             page_content=page_content,
+            data_source=doc1.data_source,
         )
 
     def merge_documents(self, docs: list[DocumentRetrieved]) -> list[DocumentRetrieved]:
@@ -141,6 +143,7 @@ class DocumentRetriever:
                 source_file=doc.metadata.get("source_file", ""),
                 sp_url=doc.metadata.get("spUrl"),
                 page_content=doc.page_content,
+                data_source=doc.metadata.get("data_source"),
             )
             for doc in docs
         ]

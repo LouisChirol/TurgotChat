@@ -10,7 +10,14 @@ from langgraph.graph import END, StateGraph
 from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.core.prompts import CLASSIFICATION_PROMPT, OUTPUT_PROMPT, TURGOT_PROMPT
+from app.core.prompts import (
+    CLASSIFICATION_PROMPT,
+    NON_ADMINISTRATIVE_RESPONSE_PROMPT,
+    OUT_OF_SCOPE_RESPONSE_PROMPT,
+    OUTPUT_PROMPT,
+    RAG_CLASSIFICATION_PROMPT,
+    TURGOT_PROMPT,
+)
 from app.services.redis import RedisService
 from app.services.retrieval import DocumentRetrieved, DocumentRetriever
 from app.utils.tokens import create_message_trimmer
@@ -45,6 +52,7 @@ class GraphState(BaseModel):
     
     # Classification
     needs_rag: bool = False
+    is_non_administrative: bool = False
     
     # RAG components
     search_query: str = ""
@@ -103,6 +111,7 @@ class TurgotGraphAgent:
         # Add all nodes
         workflow.add_node("load_history", self._load_history)
         workflow.add_node("classify_query", self._classify_query)
+        workflow.add_node("generate_non_administrative_response", self._generate_non_administrative_response)
         workflow.add_node("generate_simple_response", self._generate_simple_response)
         workflow.add_node("generate_search_query", self._generate_search_query)
         workflow.add_node("retrieve_documents", self._retrieve_documents)
@@ -120,10 +129,14 @@ class TurgotGraphAgent:
             "classify_query",
             self._route_after_classification,
             {
+                "non_administrative": "generate_non_administrative_response",
                 "simple": "generate_simple_response",
                 "rag": "generate_search_query"
             }
         )
+        
+        # Non-administrative response path
+        workflow.add_edge("generate_non_administrative_response", "store_messages")
         
         # Simple response path
         workflow.add_edge("generate_simple_response", "format_response")
@@ -165,12 +178,24 @@ class TurgotGraphAgent:
             })
     
     def _classify_query(self, state: GraphState) -> GraphState:
-        """Classify whether the query needs RAG or can be answered simply."""
+        """Classify whether the query is non-administrative or needs RAG."""
         try:
             logger.debug(f"Classifying query: {state.message[:50]}...")
             
+            # FIRST: Check if it's non-administrative
+            is_non_administrative = self._is_non_administrative_question(state.message)
+            
+            if is_non_administrative:
+                logger.info(f"Query classified as non-administrative: {state.message[:50]}...")
+                return state.model_copy(update={
+                    "needs_rag": False,
+                    "is_non_administrative": True,
+                    "error": None
+                })
+            
+            # SECOND: If administrative, check if RAG is needed
             messages = [
-                SystemMessage(content=CLASSIFICATION_PROMPT),
+                SystemMessage(content=RAG_CLASSIFICATION_PROMPT),
                 HumanMessage(content=f"Question: {state.message}"),
             ]
             
@@ -191,10 +216,11 @@ class TurgotGraphAgent:
             classification = result.content.strip().upper()
             needs_rag = classification == "OUI"
             
-            logger.info(f"Classification result: {classification} -> needs_rag={needs_rag}")
+            logger.info(f"Administrative query classification result: {classification} -> needs_rag={needs_rag}")
             
             return state.model_copy(update={
                 "needs_rag": needs_rag,
+                "is_non_administrative": False,
                 "error": None
             })
             
@@ -204,12 +230,47 @@ class TurgotGraphAgent:
             logger.warning("Defaulting to RAG=True due to classification error")
             return state.model_copy(update={
                 "needs_rag": True,
+                "is_non_administrative": False,
                 "error": None  # Don't treat this as a fatal error
             })
     
-    def _route_after_classification(self, state: GraphState) -> Literal["simple", "rag"]:
-        """Route to either simple or RAG response based on classification."""
-        return "simple" if not state.needs_rag else "rag"
+    def _route_after_classification(self, state: GraphState) -> Literal["non_administrative", "simple", "rag"]:
+        """Route based on classification results."""
+        if state.is_non_administrative:
+            return "non_administrative"
+        elif not state.needs_rag:
+            return "simple"
+        else:
+            return "rag"
+    
+    def _generate_non_administrative_response(self, state: GraphState) -> GraphState:
+        """Generate a friendly out-of-scope response using the LLM."""
+        try:
+            logger.info("Generating friendly out-of-scope response")
+            
+            # Use the LLM to generate a friendly, contextual response
+            prompt = OUT_OF_SCOPE_RESPONSE_PROMPT.format(question=state.message)
+            messages = [
+                SystemMessage(content=prompt),
+            ]
+            
+            response = self.llm.invoke(messages)
+            answer = response.content
+            
+            return state.model_copy(update={
+                "answer": answer,
+                "formatted_response": answer,
+                "error": None
+            })
+            
+        except Exception as e:
+            logger.error(f"Error generating out-of-scope response: {str(e)}")
+            fallback_answer = "Bonjour ! Je suis Turgot, votre assistant pour les démarches administratives françaises. Comment puis-je vous aider aujourd'hui ? 😊"
+            return state.model_copy(update={
+                "answer": fallback_answer,
+                "formatted_response": fallback_answer,
+                "error": f"Out-of-scope response generation failed: {str(e)}"
+            })
     
     def _generate_simple_response(self, state: GraphState) -> GraphState:
         """Generate a simple response without RAG."""
@@ -231,7 +292,7 @@ class TurgotGraphAgent:
             
             logger.info(f"Simple response: using {total_tokens} tokens ({len(trimmed_history)} messages)")
             
-            # Generate response
+            # Generate normal administrative response
             messages = [
                 SystemMessage(content=TURGOT_PROMPT),
                 SystemMessage(content="Tu réponds sans utiliser de documents de référence. Sois naturel et utile."),
@@ -256,6 +317,30 @@ class TurgotGraphAgent:
                 "answer": fallback_answer,
                 "error": f"Simple response generation failed: {str(e)}"
             })
+    
+    def _is_non_administrative_question(self, message: str) -> bool:
+        """Determine if a question is non-administrative."""
+        try:
+            # Create classification messages
+            messages = [
+                SystemMessage(content=CLASSIFICATION_PROMPT),
+                HumanMessage(content=f"Question: {message}"),
+            ]
+            
+            result = self.classifier_llm.invoke(messages)
+            classification = result.content.strip().upper()
+            
+            # If classification says "NON", it's non-administrative
+            is_non_administrative = classification == "NON"
+            logger.info(f"Non-administrative classification for '{message[:50]}...': {classification} -> is_non_administrative={is_non_administrative}")
+            
+            return is_non_administrative
+            
+        except Exception as e:
+            logger.error(f"Error in non-administrative classification: {str(e)}")
+            # Default to False if classification fails (safer approach)
+            logger.warning("Defaulting to administrative=True due to classification error")
+            return False
     
     def _generate_search_query(self, state: GraphState) -> GraphState:
         """Generate a search query for RAG retrieval."""
@@ -459,11 +544,6 @@ class TurgotGraphAgent:
             
             # Strip code blocks
             formatted_answer = self._strip_code_blocks(answer.strip())
-            
-            # ALWAYS add disclaimer if there are sources, NEVER add source bullet points
-            if state.sources and len(state.sources) > 0:
-                disclaimer_text = "\n\n## Attention:\n\nNous vous recommandons de consulter les fiches complètes des sources pour plus d'informations. La réponse est un résumé des informations contenues dans ces fiches, et ne doit pas être considérée comme exhaustive.\n"
-                formatted_answer += disclaimer_text
             
             return state.model_copy(update={
                 "formatted_response": formatted_answer,

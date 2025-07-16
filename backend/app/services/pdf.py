@@ -1,6 +1,7 @@
 import asyncio
 import os
 import tempfile
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import List, Tuple
@@ -266,19 +267,17 @@ class PDFService:
         )
     
     def cleanup_file(self, file_path: Path, delay: int = 0):
-        """Clean up a temporary file after a delay."""
-        async def _cleanup():
+        """Delete the file after a delay (in seconds)."""
+        def _cleanup():
             if delay > 0:
-                await asyncio.sleep(delay)
+                time.sleep(delay)
             try:
                 if file_path.exists():
                     file_path.unlink()
-                    logger.info(f"Cleaned up temporary file: {file_path}")
+                    logger.info(f"Deleted PDF file: {file_path}")
             except Exception as e:
-                logger.warning(f"Failed to cleanup file {file_path}: {e}")
-        
-        # Schedule the cleanup task
-        asyncio.create_task(_cleanup())
+                logger.error(f"Error deleting PDF file: {str(e)}")
+        _cleanup()
 
 
 # Backward compatibility functions
@@ -302,6 +301,7 @@ def create_chat_pdf(session_id: str) -> Path:
         # Get chat history from Redis
         redis_service = RedisService()
         history = redis_service.get_history(session_id)
+        logger.info(f"Fetched {len(history.messages)} messages for session {session_id}")
         if not history.messages:
             raise HTTPException(
                 status_code=404, detail="No chat history found for this session"
@@ -470,6 +470,9 @@ def create_chat_pdf(session_id: str) -> Path:
 
         # Add messages
         for msg in history.messages:
+            logger.info(f"Processing message type: {msg.type}, content length: {len(msg.content) if msg.content else 0}")
+            logger.info(f"Message content: {repr(msg.content[:100])}...")  # First 100 chars
+            
             # Add timestamp
             timestamp = datetime.now().strftime("%d/%m/%Y %H:%M")
             story.append(Paragraph(timestamp, styles["Timestamp"]))
@@ -484,9 +487,11 @@ def create_chat_pdf(session_id: str) -> Path:
 
             # Convert markdown to paragraphs
             paragraphs = convert_markdown_to_paragraphs(msg.content, prefix)
+            logger.info(f"Converted to {len(paragraphs)} paragraphs")
 
             # Add each paragraph with appropriate styling
-            for style_name, text in paragraphs:
+            for i, (style_name, text) in enumerate(paragraphs):
+                logger.info(f"  Paragraph {i+1}: style='{style_name}', text='{repr(text[:50])}...'")
                 if style_name == "CodeBlock":
                     # Create a table for code blocks to have a nice background
                     table_data = [[Paragraph(text, styles[style_name])]]
@@ -506,15 +511,47 @@ def create_chat_pdf(session_id: str) -> Path:
                 elif style_name == "HorizontalRule":
                     story.append(HRFlowable(width="100%", thickness=1, color=colors.gray))
                 else:
-                    story.append(Paragraph(f"{prefix}{text}", styles[style_base]))
+                    # Use fallback style if the requested style doesn't exist
+                    actual_style = styles.get(style_base, styles["Normal"])
+                    story.append(Paragraph(f"{prefix}{text}", actual_style))
                 story.append(Spacer(1, 6))
 
+        logger.info(f"Total story elements: {len(story)}")
+
+        # Check if story has valid elements
+        valid_elements = 0
+        for i, element in enumerate(story):
+            if element is not None:
+                valid_elements += 1
+            else:
+                logger.warning(f"Story element {i} is None")
+        logger.info(f"Valid story elements: {valid_elements}")
+
         # Build the PDF
-        doc.build(story)
+        try:
+            doc.build(story)
+            logger.info(f"PDF built successfully with {len(story)} elements")
+        except Exception as build_error:
+            logger.error(f"Error building PDF: {str(build_error)}")
+            logger.exception("PDF build error traceback:")
+            raise HTTPException(status_code=500, detail=f"Error building PDF: {str(build_error)}")
 
         logger.info(f"PDF created: {pdf_path}")
+        
+        # Check if the PDF file was actually created and has content
+        if pdf_path.exists():
+            file_size = pdf_path.stat().st_size
+            logger.info(f"PDF file size: {file_size} bytes")
+            if file_size == 0:
+                logger.error("PDF file is empty (0 bytes)")
+                raise HTTPException(status_code=500, detail="Generated PDF file is empty")
+        else:
+            logger.error("PDF file was not created")
+            raise HTTPException(status_code=500, detail="PDF file was not created")
+            
         return pdf_path
 
     except Exception as e:
         logger.error(f"Error creating PDF: {str(e)}")
-        raise HTTPException(status_code=500, detail="Error creating PDF")
+        logger.exception("Full traceback:")
+        raise HTTPException(status_code=500, detail=f"Error creating PDF: {str(e)}")

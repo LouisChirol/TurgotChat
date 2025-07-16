@@ -42,8 +42,9 @@ class QuestionResponse(BaseModel):
 
 
 class PDFRequest(BaseModel):
-    text: str
+    text: Optional[str] = None
     title: Optional[str] = None
+    session_id: Optional[str] = None
 
 
 class PDFResponse(BaseModel):
@@ -140,10 +141,10 @@ async def chat(request: QuestionRequest):
 @app.post("/generate-pdf", response_model=PDFResponse)
 async def generate_pdf(request: PDFRequest, background_tasks: BackgroundTasks):
     """
-    Generate a PDF from markdown text.
+    Generate a PDF from markdown text or chat session.
 
     Args:
-        request: Contains the text content and optional title
+        request: Contains either text content and optional title, or session_id
         background_tasks: FastAPI background tasks
 
     Returns:
@@ -152,10 +153,21 @@ async def generate_pdf(request: PDFRequest, background_tasks: BackgroundTasks):
     try:
         pdf_service = PDFService()
 
-        # Generate PDF
-        pdf_path = pdf_service.create_pdf_from_markdown(
-            markdown_content=request.text, title=request.title or "Document Turgot"
-        )
+        # Check if this is a session-based request
+        if request.session_id and not request.text:
+            # Generate PDF from chat session
+            from app.services.pdf import create_chat_pdf
+            pdf_path = create_chat_pdf(request.session_id)
+        elif request.text:
+            # Generate PDF from markdown text
+            pdf_path = pdf_service.create_pdf_from_markdown(
+                markdown_content=request.text, title=request.title or "Document Turgot"
+            )
+        else:
+            raise HTTPException(
+                status_code=422, 
+                detail="Either 'text' or 'session_id' must be provided"
+            )
 
         # Schedule cleanup after 1 hour
         background_tasks.add_task(pdf_service.cleanup_file, pdf_path, delay=3600)
@@ -168,6 +180,9 @@ async def generate_pdf(request: PDFRequest, background_tasks: BackgroundTasks):
 
         return PDFResponse(pdf_url=pdf_url)
 
+    except HTTPException:
+        # Re-raise HTTPExceptions as-is (like 404 for no chat history)
+        raise
     except Exception as e:
         logger.error(f"Error generating PDF: {str(e)}")
         logger.exception("Full traceback:")

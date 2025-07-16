@@ -11,7 +11,7 @@ import { clearSession, sendMessage } from '@/services/api';
 import { getSessionId } from '@/services/session';
 import { Bars3Icon } from '@heroicons/react/24/outline';
 import Image from 'next/image';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 export default function Home() {
   const [messages, setMessages] = useState([
@@ -23,10 +23,31 @@ export default function Home() {
   ]);
   const [isLoading, setIsLoading] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
-  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   const [isDisclaimerOpen, setIsDisclaimerOpen] = useState(false);
   const [dataSourceFilter, setDataSourceFilter] = useState<DataSourceType>('all');
+
+  // Clear session history on page load/refresh for privacy
+  useEffect(() => {
+    const clearHistoryOnLoad = async () => {
+      try {
+        const sessionId = getSessionId();
+        if (sessionId) {
+          // Clear the previous session from backend
+          await clearSession();
+        }
+        // Generate a new session ID
+        const newSessionId = crypto.randomUUID();
+        localStorage.setItem('turgot_session_id', newSessionId);
+        localStorage.setItem('turgot_last_activity', Date.now().toString());
+      } catch (error) {
+        console.error('Error clearing history on load:', error);
+      }
+    };
+    
+    clearHistoryOnLoad();
+  }, []);
 
   // Filter messages based on data source filter
   const filteredMessages = useMemo(() => {
@@ -103,7 +124,11 @@ export default function Home() {
 
     setIsExporting(true);
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/export-pdf`, {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const requestUrl = `${apiUrl}/generate-pdf`;
+      
+      // First, request PDF generation
+      const response = await fetch(requestUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -112,11 +137,30 @@ export default function Home() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to export PDF');
+        const errorText = await response.text();
+        console.error('Response error text:', errorText);
+        throw new Error(`Failed to export PDF: ${response.status} ${response.statusText}`);
       }
 
-      // Get the blob from the response
-      const blob = await response.blob();
+      // Get the PDF URL from the JSON response
+      const data = await response.json();
+      const pdfUrl = data.pdf_url;
+      
+      if (!pdfUrl) {
+        throw new Error('No PDF URL received');
+      }
+
+      const fullPdfUrl = `${apiUrl}${pdfUrl}`;
+
+      // Download the actual PDF file
+      const pdfResponse = await fetch(fullPdfUrl);
+      
+      if (!pdfResponse.ok) {
+        throw new Error('Failed to download PDF');
+      }
+
+      // Get the blob from the PDF response
+      const blob = await pdfResponse.blob();
       
       // Create a download link
       const url = window.URL.createObjectURL(blob);
@@ -139,7 +183,15 @@ export default function Home() {
 
   const handleReset = async () => {
     try {
+      // Clear the current session from the backend
       await clearSession();
+      
+      // Generate a new session ID to ensure complete privacy
+      const newSessionId = crypto.randomUUID();
+      localStorage.setItem('turgot_session_id', newSessionId);
+      localStorage.setItem('turgot_last_activity', Date.now().toString());
+      
+      // Reset the UI to show only the welcome message
       setMessages([
         {
           id: '1',

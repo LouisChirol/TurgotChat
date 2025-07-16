@@ -9,7 +9,12 @@ from langchain_mistralai import ChatMistralAI
 from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.core.prompts import CLASSIFICATION_PROMPT, OUTPUT_PROMPT, TURGOT_PROMPT
+from app.core.prompts import (
+    CLASSIFICATION_PROMPT,
+    NON_ADMINISTRATIVE_RESPONSE_PROMPT,
+    OUTPUT_PROMPT,
+    TURGOT_PROMPT,
+)
 from app.services.redis import RedisService
 from app.services.retrieval import DocumentRetrieved, DocumentRetriever
 from app.utils.tokens import create_message_trimmer
@@ -116,14 +121,25 @@ class TurgotAgent:
 
     def _generate_simple_response(self, message: str, history_messages: list) -> str:
         """Generate a response without RAG for simple queries."""
-        messages = [
-            SystemMessage(content=TURGOT_PROMPT),
-            SystemMessage(
-                content="Tu réponds sans utiliser de documents de référence. Sois naturel et utile."
-            ),
-            *history_messages,
-            HumanMessage(content=message),
-        ]
+        # Check if this is a non-administrative question
+        is_non_administrative = self._is_non_administrative_question(message)
+        
+        if is_non_administrative:
+            # Use the non-administrative response prompt
+            messages = [
+                SystemMessage(content=NON_ADMINISTRATIVE_RESPONSE_PROMPT),
+                HumanMessage(content=message),
+            ]
+        else:
+            # Generate normal response
+            messages = [
+                SystemMessage(content=TURGOT_PROMPT),
+                SystemMessage(
+                    content="Tu réponds sans utiliser de documents de référence. Sois naturel et utile."
+                ),
+                *history_messages,
+                HumanMessage(content=message),
+            ]
 
         try:
             response = self.llm.invoke(messages)
@@ -131,6 +147,30 @@ class TurgotAgent:
         except Exception as e:
             logger.error(f"Error generating simple response: {str(e)}")
             return "Bonjour ! Je suis Turgot, votre assistant pour les démarches administratives françaises. Comment puis-je vous aider aujourd'hui ? 😊"
+    
+    def _is_non_administrative_question(self, message: str) -> bool:
+        """Determine if a question is non-administrative."""
+        try:
+            # Create classification messages
+            messages = [
+                SystemMessage(content=CLASSIFICATION_PROMPT),
+                HumanMessage(content=f"Question: {message}"),
+            ]
+            
+            result = self.classifier_llm.invoke(messages)
+            classification = result.content.strip().upper()
+            
+            # If classification says "NON", it's non-administrative
+            is_non_administrative = classification == "NON"
+            logger.info(f"Non-administrative classification for '{message[:50]}...': {classification} -> is_non_administrative={is_non_administrative}")
+            
+            return is_non_administrative
+            
+        except Exception as e:
+            logger.error(f"Error in non-administrative classification: {str(e)}")
+            # Default to False if classification fails (safer approach)
+            logger.warning("Defaulting to administrative=True due to classification error")
+            return False
 
     def _convert_to_message_dicts(self, langchain_messages: list) -> list[dict]:
         """Convert LangChain messages to simple dictionaries for token counting."""

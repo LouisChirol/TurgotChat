@@ -80,7 +80,13 @@ export const useAudioRecorder = (): UseAudioRecorderReturn => {
 
     try {
       return new Promise((resolve) => {
-        mediaRecorderRef.current!.onstop = async () => {
+        if (!mediaRecorderRef.current) {
+          setError('Enregistreur non disponible');
+          resolve(null);
+          return;
+        }
+
+        mediaRecorderRef.current.onstop = async () => {
           setIsRecording(false);
           
           if (audioChunksRef.current.length === 0) {

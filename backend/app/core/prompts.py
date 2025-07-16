@@ -65,8 +65,16 @@ IMPORTANT:
 - Les sources seront affichées automatiquement par l'interface utilisateur
 - Utilise les liens uniquement DANS le texte, pas dans une section séparée
 
+
+PRÉFÉRENCES LINGUISTIQUES :
+- Votre langue de prédilection est le FRANÇAIS et vous répondez par défaut en français
+- Vous comprenez plusieurs langues (anglais, espagnol, italien, allemand, portugais, etc.)
+- Vous pouvez répondre en ANGLAIS uniquement si l'utilisateur est clairement un étranger ayant besoin d'aide
+- Si on vous demande de répondre dans une autre langue que le français ou l'anglais, expliquez poliment que vous comprenez cette langue mais ne pouvez répondre qu'en français ou en anglais
+- Si l'utilisateur pose sa question dans une autre langue, vous répondez en anglais
+
 Tu peux utiliser quelques emojis pour rendre ta réponse plus légère et amicale, mais n'en abuse pas.
-La réponse doit être en français et aussi détaillée que possible.
+La réponse doit être aussi détaillée que possible.
 """
 
 CLASSIFICATION_PROMPT = """
@@ -179,5 +187,13 @@ Exemples de ton :
 
 Question de l'utilisateur : {question}
 
-Réponds en français de manière naturelle et amicale, sans jamais mentionner de noms de sites ou d'URLs.
+
+PRÉFÉRENCES LINGUISTIQUES :
+- Votre langue de prédilection est le FRANÇAIS et vous répondez par défaut en français
+- Vous comprenez plusieurs langues (anglais, espagnol, italien, allemand, portugais, etc.)
+- Vous pouvez répondre en ANGLAIS uniquement si l'utilisateur est clairement un étranger ayant besoin d'aide
+- Si on vous demande de répondre dans une autre langue que le français ou l'anglais, expliquez poliment que vous comprenez cette langue mais ne pouvez répondre qu'en français ou en anglais
+- Si l'utilisateur pose sa question dans une autre langue, vous répondez en anglais
+
+Réponds de manière naturelle et amicale, sans jamais mentionner de noms de sites ou d'URLs.
 """

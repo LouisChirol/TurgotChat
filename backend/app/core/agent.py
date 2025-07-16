@@ -21,8 +21,8 @@ if not MISTRAL_API_KEY:
     raise ValueError("MISTRAL_API_KEY environment variable is not set")
 
 # RAG parameters
-TOP_K_RETRIEVAL = 15
-TOP_N_SOURCES = 4
+TOP_K_RETRIEVAL = 20
+TOP_N_SOURCES = 8
 
 # Token limits
 MAX_TOKENS = 32000  # Mistral Medium context limit
@@ -206,28 +206,10 @@ class TurgotAgent:
         # Format the answer with proper spacing and line breaks
         formatted_answer = self._strip_code_blocks(response.answer.strip())
 
-        # Format sources as markdown links with prefix
+        # ALWAYS add disclaimer if there are sources, NEVER add source bullet points
         if response.sources and len(response.sources) > 0:
-            # Check if the response already contains sources section (various formats)
-            lower_answer = formatted_answer.lower()
-            has_sources_section = any(keyword in lower_answer for keyword in [
-                "## fiches complètes",
-                "## sources",
-                "### fiches complètes", 
-                "### sources",
-                "**fiches complètes**",
-                "**sources**"
-            ])
-            
-            if not has_sources_section:
-                sources_text = "\n\n## Fiches complètes:\n"
-                sources_text += """\nNous vous recommandons de consulter les fiches complètes pour plus d'informations.
-                La réponse est un résumé des informations contenues dans ces fiches, et ne doit pas être considérée comme exhaustive.\n"""
-                for source in response.sources:
-                    sources_text += f"- [{source}]({source})\n"
-                formatted_answer += sources_text
-            else:
-                logger.info("Response already contains sources section, skipping duplicate")
+            disclaimer_text = "\n\n## Attention:\n\nNous vous recommandons de consulter les fiches complètes des sources pour plus d'informations. La réponse est un résumé des informations contenues dans ces fiches, et ne doit pas être considérée comme exhaustive.\n"
+            formatted_answer += disclaimer_text
 
         return formatted_answer
 
@@ -238,11 +220,37 @@ class TurgotAgent:
 
         context = "CONTEXTE - Documents officiels trouvés :\n\n"
 
-        for doc in docs:
-            context += f"Document {doc.id} (URL: {doc.sp_url}):\n"
-            context += "Extraits pertinents:\n"
-            context += f"{doc.page_content}\n"
-            context += "---\n\n"
+        # Group documents by data source for better organization
+        vosdroits_docs = [doc for doc in docs if doc.data_source == "vosdroits"]
+        entreprendre_docs = [doc for doc in docs if doc.data_source == "entreprendre"]
+        other_docs = [doc for doc in docs if doc.data_source not in ["vosdroits", "entreprendre"]]
+
+        # Add documents from vosdroits (particuliers)
+        if vosdroits_docs:
+            context += "👤 DOCUMENTS POUR PARTICULIERS (vosdroits) :\n"
+            for doc in vosdroits_docs:
+                context += f"Document {doc.id} (URL: {doc.sp_url}):\n"
+                context += "Extraits pertinents:\n"
+                context += f"{doc.page_content}\n"
+                context += "---\n\n"
+
+        # Add documents from entreprendre (professionnels)
+        if entreprendre_docs:
+            context += "💼 DOCUMENTS POUR PROFESSIONNELS (entreprendre) :\n"
+            for doc in entreprendre_docs:
+                context += f"Document {doc.id} (URL: {doc.sp_url}):\n"
+                context += "Extraits pertinents:\n"
+                context += f"{doc.page_content}\n"
+                context += "---\n\n"
+
+        # Add other documents if any
+        if other_docs:
+            context += "📄 AUTRES DOCUMENTS :\n"
+            for doc in other_docs:
+                context += f"Document {doc.id} (URL: {doc.sp_url}):\n"
+                context += "Extraits pertinents:\n"
+                context += f"{doc.page_content}\n"
+                context += "---\n\n"
 
         context += "INSTRUCTION: Basez votre réponse UNIQUEMENT sur les informations contenues dans ces documents. "
         context += "Si les documents contiennent des informations contradictoires ou incomplètes, mentionnez-le clairement."

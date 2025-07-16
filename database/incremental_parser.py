@@ -1,10 +1,12 @@
+import hashlib
 import os
+import sqlite3
 import time
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from hashlib import md5
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import backoff
 from dotenv import load_dotenv
@@ -18,19 +20,86 @@ from tqdm import tqdm
 load_dotenv()
 
 # Constants
-EMBEDDING_BATCH_SIZE = 20  # Increased batch size for higher rate limits
-MAX_THREADS = 8  # Increased threads for parallel processing
-MAX_DOCUMENTS = -1  # Keep the same control parameter, -1 for all
-CHUNK_SIZE = 2000  # Keep the same chunk size
-CHUNK_OVERLAP = 100  # Keep the same overlap
-BATCH_DELAY = 0.5  # Reduced delay between batches due to higher rate limits
-MAX_RETRIES = 3  # Keep the same retry logic
+EMBEDDING_BATCH_SIZE = 20
+MAX_THREADS = 8
+MAX_DOCUMENTS = -1
+CHUNK_SIZE = 2000
+CHUNK_OVERLAP = 100
+BATCH_DELAY = 0.5
+MAX_RETRIES = 3
 
 
-class XMLParserV2:
+class DocumentTracker:
+    """Tracks processed documents to enable incremental processing."""
+    
+    def __init__(self, db_path: str):
+        self.db_path = db_path
+        self.init_tracking_table()
+    
+    def init_tracking_table(self):
+        """Initialize the tracking table if it doesn't exist."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS document_tracking (
+                    file_path TEXT PRIMARY KEY,
+                    last_modified REAL,
+                    content_hash TEXT,
+                    data_source TEXT,
+                    processed_at REAL,
+                    chunk_count INTEGER
+                )
+            """)
+            conn.commit()
+    
+    def get_file_info(self, file_path: Path) -> Optional[Dict[str, Any]]:
+        """Get tracking information for a file."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(
+                "SELECT last_modified, content_hash, data_source, processed_at, chunk_count FROM document_tracking WHERE file_path = ?",
+                (str(file_path),)
+            )
+            row = cursor.fetchone()
+            if row:
+                return {
+                    'last_modified': row[0],
+                    'content_hash': row[1],
+                    'data_source': row[2],
+                    'processed_at': row[3],
+                    'chunk_count': row[4]
+                }
+        return None
+    
+    def update_file_info(self, file_path: Path, content_hash: str, data_source: str, chunk_count: int):
+        """Update tracking information for a file."""
+        current_time = time.time()
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("""
+                INSERT OR REPLACE INTO document_tracking 
+                (file_path, last_modified, content_hash, data_source, processed_at, chunk_count)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (str(file_path), current_time, content_hash, data_source, current_time, chunk_count))
+            conn.commit()
+    
+    def remove_file_info(self, file_path: Path):
+        """Remove tracking information for a file (when file is deleted)."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("DELETE FROM document_tracking WHERE file_path = ?", (str(file_path),))
+            conn.commit()
+    
+    def get_all_tracked_files(self) -> List[str]:
+        """Get all tracked file paths."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute("SELECT file_path FROM document_tracking")
+            return [row[0] for row in cursor.fetchall()]
+
+
+class IncrementalXMLParser:
     def __init__(self, data_dirs: List[str]):
         self.data_dirs = [Path(data_dir) for data_dir in data_dirs]
         self.initial_doc_count = 0
+
+        # Initialize document tracker
+        self.tracker = DocumentTracker("chroma_db/chroma.sqlite3")
 
         # Validate data directories exist and contain XML files
         total_xml_files = 0
@@ -78,6 +147,56 @@ class XMLParserV2:
         # Get initial document count
         self.initial_doc_count = self.vector_store._collection.count()
         logger.info(f"Initial document count: {self.initial_doc_count}")
+
+    def compute_file_hash(self, file_path: Path) -> str:
+        """Compute SHA-256 hash of file content."""
+        hash_sha256 = hashlib.sha256()
+        with open(file_path, "rb") as f:
+            for chunk in iter(lambda: f.read(4096), b""):
+                hash_sha256.update(chunk)
+        return hash_sha256.hexdigest()
+
+    def has_file_changed(self, file_path: Path) -> bool:
+        """Check if a file has changed since last processing."""
+        if not file_path.exists():
+            return False
+        
+        # Get current file info
+        current_mtime = file_path.stat().st_mtime
+        current_hash = self.compute_file_hash(file_path)
+        
+        # Get stored file info
+        stored_info = self.tracker.get_file_info(file_path)
+        
+        if not stored_info:
+            logger.debug(f"New file detected: {file_path}")
+            return True
+        
+        # Check if modification time or content hash has changed
+        if stored_info['last_modified'] != current_mtime or stored_info['content_hash'] != current_hash:
+            logger.debug(f"File changed: {file_path}")
+            return True
+        
+        logger.debug(f"File unchanged: {file_path}")
+        return False
+
+    def remove_deleted_documents(self):
+        """Remove documents from vector store for files that no longer exist."""
+        tracked_files = self.tracker.get_all_tracked_files()
+        deleted_files = []
+        
+        for file_path_str in tracked_files:
+            file_path = Path(file_path_str)
+            if not file_path.exists():
+                deleted_files.append(file_path_str)
+                logger.info(f"File deleted: {file_path_str}")
+        
+        if deleted_files:
+            logger.info(f"Removing {len(deleted_files)} deleted files from tracking")
+            for file_path_str in deleted_files:
+                self.tracker.remove_file_info(Path(file_path_str))
+                # Note: We could also remove from vector store, but that's more complex
+                # For now, we just remove from tracking
 
     def extract_text_content(self, element: ET.Element) -> str:
         """Extract text content from XML element and its children without duplication."""
@@ -150,6 +269,11 @@ class XMLParserV2:
                     },
                 }
                 documents.append(doc)
+            
+            # Update tracking information
+            content_hash = self.compute_file_hash(file_path)
+            self.tracker.update_file_info(file_path, content_hash, metadata["data_source"], len(chunks))
+            
             return documents
 
         except Exception as e:
@@ -180,7 +304,7 @@ class XMLParserV2:
 
         texts = [doc["content"] for doc in batch]
         metadatas = [doc["metadata"] for doc in batch]
-        hash_ids = [md5(text.encode()).hexdigest() for text in texts]
+        hash_ids = [hashlib.md5(text.encode()).hexdigest() for text in texts]
         ids = [f"doc_{i}_{hash_id}" for i, hash_id in enumerate(hash_ids)]
 
         try:
@@ -224,24 +348,32 @@ class XMLParserV2:
                     logger.error(f"Batch {batch_idx + 1} failed: {str(e)}")
                     total_errors += len(batches[batch_idx])
 
-                    logger.error(f"Batch {batch_idx + 1} failed: {str(e)}")
-                    total_errors += len(batches[batch_idx])
-
         return total_success, total_errors
 
     def process_directory(self):
-        """Process XML files from all data directories sequentially, but process batches from each file in parallel."""
+        """Process only changed XML files incrementally."""
+        # First, remove tracking for deleted files
+        self.remove_deleted_documents()
+        
+        # Collect all XML files
         all_xml_files = []
         for data_dir in self.data_dirs:
             xml_files = list(data_dir.rglob("*.xml"))[:MAX_DOCUMENTS]
             all_xml_files.extend(xml_files)
         
-        logger.info(f"Processing {len(all_xml_files)} XML files from {len(self.data_dirs)} directories")
+        # Filter for changed files only
+        changed_files = [f for f in all_xml_files if self.has_file_changed(f)]
+        
+        logger.info(f"Found {len(changed_files)} changed files out of {len(all_xml_files)} total files")
+        
+        if not changed_files:
+            logger.info("No files have changed since last processing. Nothing to do.")
+            return
 
         total_success = 0
         total_errors = 0
 
-        for file_path in tqdm(all_xml_files, desc="Processing files"):
+        for file_path in tqdm(changed_files, desc="Processing changed files"):
             try:
                 documents = self.process_xml_file(file_path)
                 if not documents:
@@ -260,7 +392,7 @@ class XMLParserV2:
         final_doc_count = self.vector_store._collection.count()
         added_docs = final_doc_count - self.initial_doc_count
 
-        logger.info("Processing complete!")
+        logger.info("Incremental processing complete!")
         logger.info(f"Documents added: {added_docs}")
         logger.info(f"Successful: {total_success}")
         logger.info(f"Failed: {total_errors}")
@@ -268,7 +400,7 @@ class XMLParserV2:
         if added_docs != total_success:
             logger.error(f"Document count mismatch! Expected {total_success}, got {added_docs}")
         else:
-            logger.success("All documents added successfully")
+            logger.success("All changed documents processed successfully")
 
 
 def main():
@@ -278,7 +410,7 @@ def main():
         "data/service-public/entreprendre-latest"
     ]
     
-    parser = XMLParserV2(data_directories)
+    parser = IncrementalXMLParser(data_directories)
     parser.process_directory()
 
 

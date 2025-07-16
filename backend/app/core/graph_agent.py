@@ -1,7 +1,7 @@
 import os
 import re
 import time
-sfrom typing import Any, List, Literal
+from typing import Any, List, Literal
 
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -126,7 +126,7 @@ class TurgotGraphAgent:
         )
         
         # Simple response path
-        workflow.add_edge("generate_simple_response", "store_messages")
+        workflow.add_edge("generate_simple_response", "format_response")
         
         # RAG response path
         workflow.add_edge("generate_search_query", "retrieve_documents")
@@ -244,7 +244,6 @@ class TurgotGraphAgent:
             
             return state.model_copy(update={
                 "answer": answer,
-                "formatted_response": answer,  # For simple responses, no additional formatting needed
                 "trimmed_history": trimmed_history,
                 "total_tokens": total_tokens,
                 "error": None
@@ -255,7 +254,6 @@ class TurgotGraphAgent:
             fallback_answer = "Bonjour ! Je suis Turgot, votre assistant pour les démarches administratives françaises. Comment puis-je vous aider aujourd'hui ? 😊"
             return state.model_copy(update={
                 "answer": fallback_answer,
-                "formatted_response": fallback_answer,
                 "error": f"Simple response generation failed: {str(e)}"
             })
     
@@ -317,18 +315,53 @@ class TurgotGraphAgent:
                 context = "CONTEXTE - Documents officiels trouvés :\n\n"
                 sources = []
                 
-                for doc in docs:
-                    context += f"Document {doc.id} (URL: {doc.sp_url}):\n"
-                    context += "Extraits pertinents:\n"
-                    context += f"{doc.page_content}\n"
-                    context += "---\n\n"
-                    
-                    # Extract valid sources
-                    if doc.sp_url is not None and doc.sp_url.strip():
-                        sources.append(doc.sp_url)
+                # Group documents by data source for better organization
+                vosdroits_docs = [doc for doc in docs if doc.data_source == "vosdroits"]
+                entreprendre_docs = [doc for doc in docs if doc.data_source == "entreprendre"]
+                other_docs = [doc for doc in docs if doc.data_source not in ["vosdroits", "entreprendre"]]
+                
+                # Add documents from vosdroits (particuliers)
+                if vosdroits_docs:
+                    context += "👤 DOCUMENTS POUR PARTICULIERS (vosdroits) :\n"
+                    for doc in vosdroits_docs:
+                        context += f"Document {doc.id} (URL: {doc.sp_url}):\n"
+                        context += "Extraits pertinents:\n"
+                        context += f"{doc.page_content}\n"
+                        context += "---\n\n"
+                        
+                        # Extract valid sources
+                        if doc.sp_url is not None and doc.sp_url.strip():
+                            sources.append(doc.sp_url)
+                
+                # Add documents from entreprendre (professionnels)
+                if entreprendre_docs:
+                    context += "💼 DOCUMENTS POUR PROFESSIONNELS (entreprendre) :\n"
+                    for doc in entreprendre_docs:
+                        context += f"Document {doc.id} (URL: {doc.sp_url}):\n"
+                        context += "Extraits pertinents:\n"
+                        context += f"{doc.page_content}\n"
+                        context += "---\n\n"
+                        
+                        # Extract valid sources
+                        if doc.sp_url is not None and doc.sp_url.strip():
+                            sources.append(doc.sp_url)
+                
+                # Add other documents if any
+                if other_docs:
+                    context += "📄 AUTRES DOCUMENTS :\n"
+                    for doc in other_docs:
+                        context += f"Document {doc.id} (URL: {doc.sp_url}):\n"
+                        context += "Extraits pertinents:\n"
+                        context += f"{doc.page_content}\n"
+                        context += "---\n\n"
+                        
+                        # Extract valid sources
+                        if doc.sp_url is not None and doc.sp_url.strip():
+                            sources.append(doc.sp_url)
                 
                 context += "INSTRUCTION: Basez votre réponse UNIQUEMENT sur les informations contenues dans ces documents. "
-                context += "Si les documents contiennent des informations contradictoires ou incomplètes, mentionnez-le clairement."
+                context += "Si les documents contiennent des informations contradictoires ou incomplètes, mentionnez-le clairement. "
+                context += "Adaptez votre réponse selon le type de public concerné (particuliers vs professionnels)."
             
             logger.debug(f"Formatted context with {len(sources)} sources")
             
@@ -423,36 +456,14 @@ class TurgotGraphAgent:
         """Format the final response with sources."""
         try:
             answer = state.answer
-            sources = state.sources
             
             # Strip code blocks
             formatted_answer = self._strip_code_blocks(answer.strip())
             
-            # Add sources if they exist and aren't already included
-            if sources and len(sources) > 0:
-                lower_answer = formatted_answer.lower()
-                has_sources_section = any(keyword in lower_answer for keyword in [
-                    "## fiches complètes",
-                    "## sources", 
-                    "### fiches complètes",
-                    "### sources",
-                    "**fiches complètes**",
-                    "**sources**"
-                ])
-                
-                if not has_sources_section:
-                    sources_text = "\n\n## Fiches complètes:\n"
-                    sources_text += "\nNous vous recommandons de consulter les fiches complètes pour plus d'informations.\n"
-                    sources_text += "La réponse est un résumé des informations contenues dans ces fiches, et ne doit pas être considérée comme exhaustive.\n"
-                    for source in sources:
-                        sources_text += f"- [{source}]({source})\n"
-                    formatted_answer += sources_text
-                else:
-                    logger.info("Response already contains sources section, skipping duplicate")
-            
-            # If no sources found, add service-public.fr as fallback
-            elif not state.documents:
-                formatted_answer += "\n\n## Sources:\n- [https://www.service-public.fr](https://www.service-public.fr)\n"
+            # ALWAYS add disclaimer if there are sources, NEVER add source bullet points
+            if state.sources and len(state.sources) > 0:
+                disclaimer_text = "\n\n## Attention:\n\nNous vous recommandons de consulter les fiches complètes des sources pour plus d'informations. La réponse est un résumé des informations contenues dans ces fiches, et ne doit pas être considérée comme exhaustive.\n"
+                formatted_answer += disclaimer_text
             
             return state.model_copy(update={
                 "formatted_response": formatted_answer,

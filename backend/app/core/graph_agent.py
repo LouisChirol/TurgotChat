@@ -3,24 +3,18 @@ import re
 import time
 from typing import Any, List, Literal
 
+from app.core.prompts import (CLASSIFICATION_PROMPT,
+                              OUT_OF_SCOPE_RESPONSE_PROMPT, OUTPUT_PROMPT,
+                              RAG_CLASSIFICATION_PROMPT, TURGOT_PROMPT)
+from app.services.redis import RedisService
+from app.services.retrieval import DocumentRetrieved, DocumentRetriever
+from app.utils.tokens import create_message_trimmer
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_mistralai import ChatMistralAI
 from langgraph.graph import END, StateGraph
 from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field
-
-from app.core.prompts import (
-    CLASSIFICATION_PROMPT,
-    NON_ADMINISTRATIVE_RESPONSE_PROMPT,
-    OUT_OF_SCOPE_RESPONSE_PROMPT,
-    OUTPUT_PROMPT,
-    RAG_CLASSIFICATION_PROMPT,
-    TURGOT_PROMPT,
-)
-from app.services.redis import RedisService
-from app.services.retrieval import DocumentRetrieved, DocumentRetriever
-from app.utils.tokens import create_message_trimmer
 
 load_dotenv()
 
@@ -29,8 +23,8 @@ if not MISTRAL_API_KEY:
     raise ValueError("MISTRAL_API_KEY environment variable is not set")
 
 # RAG parameters
-TOP_K_RETRIEVAL = 15
-TOP_N_SOURCES = 4
+TOP_K_RETRIEVAL = 20
+TOP_N_SOURCES = 8
 
 # Token limits
 MAX_TOKENS = 32000
@@ -544,6 +538,11 @@ class TurgotGraphAgent:
             
             # Strip code blocks
             formatted_answer = self._strip_code_blocks(answer.strip())
+            
+            # Add attention section if there are sources
+            if state.sources and len(state.sources) > 0:
+                attention_text = "\n\n### Attention\nCette réponse n'est pas exhaustive, prenez le temps de lire en détail les sources proposées.\n"
+                formatted_answer += attention_text
             
             return state.model_copy(update={
                 "formatted_response": formatted_answer,

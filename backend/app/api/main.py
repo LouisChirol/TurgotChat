@@ -4,13 +4,13 @@ from contextlib import asynccontextmanager
 from typing import Optional
 
 import uvicorn
-from fastapi import BackgroundTasks, FastAPI, HTTPException
+from app.core.graph_agent import TurgotGraphAgent
+from app.services.pdf import PDFService
+from app.services.transcription import TranscriptionService
+from fastapi import BackgroundTasks, FastAPI, HTTPException, File
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 from pydantic import BaseModel
-
-from app.core.graph_agent import TurgotGraphAgent
-from app.services.pdf import PDFService
 
 # Configure logging
 logger.remove()  # Remove default handler
@@ -62,6 +62,11 @@ class ClearSessionResponse(BaseModel):
 
 class LastUpdateResponse(BaseModel):
     last_update: str
+
+
+class TranscriptionResponse(BaseModel):
+    text: str
+    success: bool
 
 
 # Global agent instance
@@ -243,6 +248,45 @@ async def clear_session(request: ClearSessionRequest):
         logger.exception("Full traceback:")
         raise HTTPException(
             status_code=500, detail="Erreur lors de la suppression de la session"
+        )
+
+
+@app.post("/transcribe", response_model=TranscriptionResponse)
+async def transcribe_audio(audio: bytes = File(...)):
+    """
+    Transcribe audio to text using Voxtral API.
+    
+    Args:
+        audio: Raw audio file data
+        
+    Returns:
+        Transcribed text
+    """
+    try:
+        logger.info("Starting audio transcription")
+        
+        # Initialize transcription service
+        transcription_service = TranscriptionService()
+        
+        # Transcribe audio (assuming MP3 format for now)
+        transcribed_text = transcription_service.transcribe_audio(audio, "mp3")
+        
+        logger.info(f"Transcription completed: {len(transcribed_text)} characters")
+        
+        return TranscriptionResponse(
+            text=transcribed_text,
+            success=True
+        )
+        
+    except HTTPException:
+        # Re-raise HTTPExceptions as-is
+        raise
+    except Exception as e:
+        logger.error(f"Error during transcription: {str(e)}")
+        logger.exception("Full traceback:")
+        raise HTTPException(
+            status_code=500,
+            detail="Erreur lors de la transcription audio"
         )
 
 

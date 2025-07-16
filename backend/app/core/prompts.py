@@ -49,11 +49,15 @@ Exemple: web_search("prix carte identité")
 OUTPUT_PROMPT = """
 Tu dois répondre à la question de l'utilisateur en utilisant les documents fournis, au format markdown.
 Tu peux mettre en forme les documents fournis en utilisant les balises markdown, des titres, listes, liens, etc.
-Utilise les URLs des documents fournis pour référencer les informations.
+Utilise les URLs des documents fournis pour référencer les informations DIRECTEMENT DANS LE TEXTE avec des liens markdown (ex: [titre](URL)).
 Demande à la fin si l'utilisateur a besoin d'autres informations, ou s'il a des détails à ajouter.
 Si une source est un formulaire de démarche, indique-le à l'utilisateur.
 
-IMPORTANT: Ne liste pas les sources à la toute fin et n'ajoute pas de section "Fiches complètes" ou "Sources" - elles seront ajoutées automatiquement après ta réponse.
+IMPORTANT: 
+- Ne liste JAMAIS les sources à la toute fin de ta réponse
+- N'ajoute JAMAIS de section "Fiches complètes", "Sources", "Références" ou toute autre section de références
+- Les sources seront affichées automatiquement par l'interface utilisateur
+- Utilise les liens uniquement DANS le texte, pas dans une section séparée
 
 Tu peux utiliser quelques emojis pour rendre ta réponse plus légère et amicale, mais n'en abuse pas.
 La réponse doit être en français et aussi détaillée que possible.

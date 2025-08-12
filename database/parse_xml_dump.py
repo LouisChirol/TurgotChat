@@ -37,7 +37,7 @@ class XMLParserV2:
         for data_dir in self.data_dirs:
             if not data_dir.exists():
                 raise ValueError(f"Data directory does not exist: {data_dir}")
-            
+
             xml_files = list(data_dir.rglob("*.xml"))
             if not xml_files:
                 logger.warning(f"No XML files found in {data_dir}")
@@ -123,7 +123,7 @@ class XMLParserV2:
                 return []
 
             metadata["source_file"] = str(file_path)
-            
+
             # Add data source identifier based on file path
             if "vosdroits" in str(file_path):
                 metadata["data_source"] = "vosdroits"
@@ -131,7 +131,7 @@ class XMLParserV2:
                 metadata["data_source"] = "entreprendre"
             else:
                 metadata["data_source"] = "unknown"
-            
+
             chunks = self.text_splitter.split_text(content)
 
             if not chunks:
@@ -235,8 +235,10 @@ class XMLParserV2:
         for data_dir in self.data_dirs:
             xml_files = list(data_dir.rglob("*.xml"))[:MAX_DOCUMENTS]
             all_xml_files.extend(xml_files)
-        
-        logger.info(f"Processing {len(all_xml_files)} XML files from {len(self.data_dirs)} directories")
+
+        logger.info(
+            f"Processing {len(all_xml_files)} XML files from {len(self.data_dirs)} directories"
+        )
 
         total_success = 0
         total_errors = 0
@@ -266,7 +268,9 @@ class XMLParserV2:
         logger.info(f"Failed: {total_errors}")
 
         if added_docs != total_success:
-            logger.error(f"Document count mismatch! Expected {total_success}, got {added_docs}")
+            logger.error(
+                f"Document count mismatch! Expected {total_success}, got {added_docs}"
+            )
         else:
             logger.success("All documents added successfully")
 
@@ -275,12 +279,12 @@ def main():
     # Process both vosdroits and entreprendre data sources
     data_directories = [
         "data/service-public/vosdroits-latest",
-        "data/service-public/entreprendre-latest"
+        "data/service-public/entreprendre-latest",
     ]
-    
+
     parser = XMLParserV2(data_directories)
     parser.process_directory()
 
 
 if __name__ == "__main__":
-    main() 
+    main()

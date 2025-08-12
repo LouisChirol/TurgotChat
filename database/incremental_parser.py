@@ -4,7 +4,6 @@ import sqlite3
 import time
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -31,11 +30,11 @@ MAX_RETRIES = 3
 
 class DocumentTracker:
     """Tracks processed documents to enable incremental processing."""
-    
+
     def __init__(self, db_path: str):
         self.db_path = db_path
         self.init_tracking_table()
-    
+
     def init_tracking_table(self):
         """Initialize the tracking table if it doesn't exist."""
         with sqlite3.connect(self.db_path) as conn:
@@ -50,42 +49,56 @@ class DocumentTracker:
                 )
             """)
             conn.commit()
-    
+
     def get_file_info(self, file_path: Path) -> Optional[Dict[str, Any]]:
         """Get tracking information for a file."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.execute(
                 "SELECT last_modified, content_hash, data_source, processed_at, chunk_count FROM document_tracking WHERE file_path = ?",
-                (str(file_path),)
+                (str(file_path),),
             )
             row = cursor.fetchone()
             if row:
                 return {
-                    'last_modified': row[0],
-                    'content_hash': row[1],
-                    'data_source': row[2],
-                    'processed_at': row[3],
-                    'chunk_count': row[4]
+                    "last_modified": row[0],
+                    "content_hash": row[1],
+                    "data_source": row[2],
+                    "processed_at": row[3],
+                    "chunk_count": row[4],
                 }
         return None
-    
-    def update_file_info(self, file_path: Path, content_hash: str, data_source: str, chunk_count: int):
+
+    def update_file_info(
+        self, file_path: Path, content_hash: str, data_source: str, chunk_count: int
+    ):
         """Update tracking information for a file."""
         current_time = time.time()
         with sqlite3.connect(self.db_path) as conn:
-            conn.execute("""
+            conn.execute(
+                """
                 INSERT OR REPLACE INTO document_tracking 
                 (file_path, last_modified, content_hash, data_source, processed_at, chunk_count)
                 VALUES (?, ?, ?, ?, ?, ?)
-            """, (str(file_path), current_time, content_hash, data_source, current_time, chunk_count))
+            """,
+                (
+                    str(file_path),
+                    current_time,
+                    content_hash,
+                    data_source,
+                    current_time,
+                    chunk_count,
+                ),
+            )
             conn.commit()
-    
+
     def remove_file_info(self, file_path: Path):
         """Remove tracking information for a file (when file is deleted)."""
         with sqlite3.connect(self.db_path) as conn:
-            conn.execute("DELETE FROM document_tracking WHERE file_path = ?", (str(file_path),))
+            conn.execute(
+                "DELETE FROM document_tracking WHERE file_path = ?", (str(file_path),)
+            )
             conn.commit()
-    
+
     def get_all_tracked_files(self) -> List[str]:
         """Get all tracked file paths."""
         with sqlite3.connect(self.db_path) as conn:
@@ -106,7 +119,7 @@ class IncrementalXMLParser:
         for data_dir in self.data_dirs:
             if not data_dir.exists():
                 raise ValueError(f"Data directory does not exist: {data_dir}")
-            
+
             xml_files = list(data_dir.rglob("*.xml"))
             if not xml_files:
                 logger.warning(f"No XML files found in {data_dir}")
@@ -160,23 +173,26 @@ class IncrementalXMLParser:
         """Check if a file has changed since last processing."""
         if not file_path.exists():
             return False
-        
+
         # Get current file info
         current_mtime = file_path.stat().st_mtime
         current_hash = self.compute_file_hash(file_path)
-        
+
         # Get stored file info
         stored_info = self.tracker.get_file_info(file_path)
-        
+
         if not stored_info:
             logger.debug(f"New file detected: {file_path}")
             return True
-        
+
         # Check if modification time or content hash has changed
-        if stored_info['last_modified'] != current_mtime or stored_info['content_hash'] != current_hash:
+        if (
+            stored_info["last_modified"] != current_mtime
+            or stored_info["content_hash"] != current_hash
+        ):
             logger.debug(f"File changed: {file_path}")
             return True
-        
+
         logger.debug(f"File unchanged: {file_path}")
         return False
 
@@ -184,13 +200,13 @@ class IncrementalXMLParser:
         """Remove documents from vector store for files that no longer exist."""
         tracked_files = self.tracker.get_all_tracked_files()
         deleted_files = []
-        
+
         for file_path_str in tracked_files:
             file_path = Path(file_path_str)
             if not file_path.exists():
                 deleted_files.append(file_path_str)
                 logger.info(f"File deleted: {file_path_str}")
-        
+
         if deleted_files:
             logger.info(f"Removing {len(deleted_files)} deleted files from tracking")
             for file_path_str in deleted_files:
@@ -242,7 +258,7 @@ class IncrementalXMLParser:
                 return []
 
             metadata["source_file"] = str(file_path)
-            
+
             # Add data source identifier based on file path
             if "vosdroits" in str(file_path):
                 metadata["data_source"] = "vosdroits"
@@ -250,7 +266,7 @@ class IncrementalXMLParser:
                 metadata["data_source"] = "entreprendre"
             else:
                 metadata["data_source"] = "unknown"
-            
+
             chunks = self.text_splitter.split_text(content)
 
             if not chunks:
@@ -269,11 +285,13 @@ class IncrementalXMLParser:
                     },
                 }
                 documents.append(doc)
-            
+
             # Update tracking information
             content_hash = self.compute_file_hash(file_path)
-            self.tracker.update_file_info(file_path, content_hash, metadata["data_source"], len(chunks))
-            
+            self.tracker.update_file_info(
+                file_path, content_hash, metadata["data_source"], len(chunks)
+            )
+
             return documents
 
         except Exception as e:
@@ -354,18 +372,20 @@ class IncrementalXMLParser:
         """Process only changed XML files incrementally."""
         # First, remove tracking for deleted files
         self.remove_deleted_documents()
-        
+
         # Collect all XML files
         all_xml_files = []
         for data_dir in self.data_dirs:
             xml_files = list(data_dir.rglob("*.xml"))[:MAX_DOCUMENTS]
             all_xml_files.extend(xml_files)
-        
+
         # Filter for changed files only
         changed_files = [f for f in all_xml_files if self.has_file_changed(f)]
-        
-        logger.info(f"Found {len(changed_files)} changed files out of {len(all_xml_files)} total files")
-        
+
+        logger.info(
+            f"Found {len(changed_files)} changed files out of {len(all_xml_files)} total files"
+        )
+
         if not changed_files:
             logger.info("No files have changed since last processing. Nothing to do.")
             return
@@ -398,7 +418,9 @@ class IncrementalXMLParser:
         logger.info(f"Failed: {total_errors}")
 
         if added_docs != total_success:
-            logger.error(f"Document count mismatch! Expected {total_success}, got {added_docs}")
+            logger.error(
+                f"Document count mismatch! Expected {total_success}, got {added_docs}"
+            )
         else:
             logger.success("All changed documents processed successfully")
 
@@ -407,12 +429,12 @@ def main():
     # Process both vosdroits and entreprendre data sources
     data_directories = [
         "data/service-public/vosdroits-latest",
-        "data/service-public/entreprendre-latest"
+        "data/service-public/entreprendre-latest",
     ]
-    
+
     parser = IncrementalXMLParser(data_directories)
     parser.process_directory()
 
 
 if __name__ == "__main__":
-    main() 
+    main()

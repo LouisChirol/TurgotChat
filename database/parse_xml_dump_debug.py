@@ -302,7 +302,7 @@ class XMLParserDebug:
 
 def main():
     # Use the correct path to the XML files
-    parser = XMLParserDebugV2("data/service-public")
+    parser = XMLParserDebug("data/service-public")
     parser.process_directory()
 
 

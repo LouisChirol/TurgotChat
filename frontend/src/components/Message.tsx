@@ -17,12 +17,16 @@ interface MessageProps {
   sources?: Source[];
   secondarySources?: Source[];
   isError?: boolean;
+  isStreaming?: boolean;
 }
 
-const Message = ({ role, content, sources = [], secondarySources = [], isError = false }: MessageProps) => {
+const Message = ({ role, content, sources = [], secondarySources = [], isError = false, isStreaming = false }: MessageProps) => {
   const isUser = role === 'user';
 
   const getAvatarSrc = () => {
+    if (isStreaming) {
+      return '/turgot_thinking.png';
+    }
     if (isError || content.includes("Désolé, une erreur est survenue. Veuillez réessayer.")) {
       return '/turgot_sorry.png';
     }

@@ -7,7 +7,7 @@ import ConfirmationModal from '@/components/ConfirmationModal';
 import DataSourceFilter, { DataSourceType } from '@/components/DataSourceFilter';
 import { DarkModeButton, DisclaimerModal, InfoButton } from '@/components/Disclaimer';
 import SupportButton from '@/components/SupportButton';
-import { clearSession, sendMessage } from '@/services/api';
+import { clearSession, sendMessageStream } from '@/services/api';
 import { getSessionId } from '@/services/session';
 import { Bars3Icon } from '@heroicons/react/24/outline';
 import Image from 'next/image';
@@ -37,6 +37,7 @@ export default function Home() {
   ]);
   const [isLoading, setIsLoading] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   const [isDisclaimerOpen, setIsDisclaimerOpen] = useState(false);
@@ -106,16 +107,25 @@ export default function Home() {
     };
 
     setMessages((prev) => [...prev, newMessage]);
-    setIsLoading(true);
+    setIsLoading(false);
+    setIsStreaming(true);
 
     try {
-      const response = await sendMessage(message);
-      const aiMessage = {
-        id: (Date.now() + 1).toString(),
-        content: response.answer,
-        isUser: false,
-      };
-      setMessages((prev) => [...prev, aiMessage]);
+      const assistantId = (Date.now() + 1).toString();
+      // Append an empty assistant message that will be filled progressively
+      setMessages((prev) => [...prev, { id: assistantId, content: '', isUser: false, isStreaming: true } as any]);
+
+      await sendMessageStream(
+        message,
+        (delta) => {
+          setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, content: (m.content || '') + delta } : m)));
+        },
+        (sources) => {
+          setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, sources } as any : m)));
+        }
+      );
+      // Mark message as no longer streaming
+      setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, isStreaming: false } : m)));
     } catch (error) {
       console.error('Error sending message:', error);
       const errorMessage = {
@@ -125,7 +135,7 @@ export default function Home() {
       };
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
-      setIsLoading(false);
+      setIsStreaming(false);
     }
   };
 
@@ -282,7 +292,7 @@ export default function Home() {
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="flex-1 overflow-y-auto">
           <div className="max-w-4xl mx-auto px-4 py-4">
-            <ChatInterface messages={filteredMessages} isLoading={isLoading} />
+            <ChatInterface messages={filteredMessages} isLoading={false} />
           </div>
         </div>
 
@@ -295,7 +305,7 @@ export default function Home() {
             <div className="flex-1 bg-red-600"></div>
           </div>
           <div className="max-w-4xl mx-auto px-4 py-4">
-            <ChatInput onSendMessage={handleSendMessage} isLoading={isLoading} />
+            <ChatInput onSendMessage={handleSendMessage} isLoading={isStreaming} />
           </div>
         </div>
       </div>

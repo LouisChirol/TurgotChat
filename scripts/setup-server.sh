@@ -57,7 +57,7 @@ sudo certbot --nginx -d turgotchat.fr -d www.turgotchat.fr -d api.turgotchat.fr
 
 # Set environment variables
 export MISTRAL_API_KEY=your-api-key
-export TAVILY_API_KEY=your-api-key
+# export TAVILY_API_KEY=your-api-key
 
 # Build and start containers
 docker-compose down

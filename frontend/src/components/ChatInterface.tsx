@@ -8,6 +8,7 @@ interface Message {
     id: string;
     content: string;
     isUser: boolean;
+    isStreaming?: boolean;
     sources?: Array<{
         url: string;
         title: string;
@@ -45,6 +46,7 @@ const ChatInterface = ({ messages, isLoading }: ChatInterfaceProps) => {
                         key={message.id}
                         role={message.isUser ? 'user' : 'assistant'}
                         content={message.content}
+                        isStreaming={message.isStreaming}
                         sources={message.sources}
                         secondarySources={message.secondarySources}
                         isError={message.isError}

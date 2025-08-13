@@ -38,5 +38,7 @@ services:
       - ./database/chroma_db:/app/database/chroma_db
       - ./database/data:/app/database/data
       - ./database/last_update.txt:/app/database/last_update.txt
+    profiles:
+      - maintenance
     # Do not auto-run; we'll call it on-demand via cron
     restart: "no"

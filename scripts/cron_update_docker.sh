@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-DIR="~/turgot/database"
-LOG_DIR="$DIR/logs"
+# Absolute repo path on server
+REPO="/home/ubuntu/turgot"
+LOG_DIR="$REPO/logs"
 LOCK_FILE="/tmp/turgot_db_update.lock"
 
 mkdir -p "$LOG_DIR"
@@ -13,14 +14,19 @@ LOGFILE="$LOG_DIR/db_update_$TS.log"
 exec > >(tee -a "$LOGFILE") 2>&1
 
 echo "==== DB updater start: $TS ===="
-cd "$DIR"
+cd "$REPO"
 
 # Ensure env for compose interpolation
-if [ -f "$DIR/.env" ]; then
-  set -a; source "$DIR/.env"; set +a
+if [ -f "$REPO/.env" ]; then
+  set -a; source "$REPO/.env"; set +a
 fi
 
-# Prevent overlapping runs; run updater container once and remove it
-flock -n "$LOCK_FILE" -c "docker compose run --rm db_updater"
+# Prevent overlapping runs; stop backend during update to avoid DB contention
+flock -n "$LOCK_FILE" bash -c '
+  set -e
+  docker compose stop backend || true
+  docker compose --profile maintenance run --rm db_updater
+  docker compose start backend || true
+'
 
-echo '==== DB updater done: '$(date +%F_%H-%M-%S)
+echo "==== DB updater done: $(date +%F_%H-%M-%S) ===="

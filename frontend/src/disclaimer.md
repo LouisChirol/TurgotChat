@@ -8,6 +8,10 @@ Il est fortement recommandé de vérifier systématiquement les informations obt
 
 Aucune donnée personnelle n’est conservée, utilisée à des fins publicitaires ou transmise à des tiers. Les échanges sont temporaires et non stockés durablement.
 
+**Fonctionnalité de transcription vocale :** Cette application utilise la technologie de transcription vocale de Mistral AI (Voxtral) pour convertir vos messages vocaux en texte. Les enregistrements audio sont envoyés temporairement au service de transcription et sont immédiatement supprimés après traitement. Aucun enregistrement vocal n'est conservé ou stocké.
+
+⚠️ **ATTENTION :** Ne partagez jamais d'informations personnelles, sensibles ou confidentielles dans vos messages vocaux ou textuels. Cette fonctionnalité est destinée uniquement à faciliter la saisie de questions générales sur l'administration française.
+
 Ce projet est entièrement gratuit, non commercial, sans objectif lucratif.
 
 En utilisant ce site, vous acceptez ces conditions et reconnaissez que la responsabilité du fournisseur du service ne saurait être engagée en cas de mauvaise interprétation, d'utilisation abusive ou de préjudice résultant des réponses de l’IA.

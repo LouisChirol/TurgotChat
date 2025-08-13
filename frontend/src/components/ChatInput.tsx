@@ -1,7 +1,8 @@
 'use client';
 
-import { Send } from 'lucide-react';
+import { Loader2, Mic, MicOff, Send } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { useAudioRecorder } from '../hooks/useAudioRecorder';
 
 interface ChatInputProps {
   onSendMessage: (content: string) => void;
@@ -12,6 +13,14 @@ interface ChatInputProps {
 const ChatInput = ({ onSendMessage, disabled = false, isLoading = false }: ChatInputProps) => {
   const [message, setMessage] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const {
+    isRecording,
+    isTranscribing,
+    startRecording,
+    stopRecording,
+    error,
+    clearError,
+  } = useAudioRecorder();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,6 +53,26 @@ const ChatInput = ({ onSendMessage, disabled = false, isLoading = false }: ChatI
     adjustTextareaHeight();
   }, [message]);
 
+  const handleMicClick = async () => {
+    if (isRecording) {
+      const transcribedText = await stopRecording();
+      if (transcribedText) {
+        setMessage(transcribedText);
+      }
+    } else {
+      await startRecording();
+    }
+  };
+
+  // Show error toast
+  useEffect(() => {
+    if (error) {
+      // You can replace this with a proper toast library
+      alert(error);
+      clearError();
+    }
+  }, [error, clearError]);
+
   return (
     <form onSubmit={handleSubmit} className="chat-input bg-white dark:bg-gray-800 flex items-center gap-2 p-4 border-t transition-colors duration-200">
       <div className="flex-1">
@@ -65,6 +94,34 @@ const ChatInput = ({ onSendMessage, disabled = false, isLoading = false }: ChatI
           }}
         />
       </div>
+      
+      {/* Microphone Button */}
+      <button
+        type="button"
+        onClick={handleMicClick}
+        className={`p-3 rounded-lg transition-all min-h-[44px] min-w-[44px] flex items-center justify-center relative group ${
+          isRecording 
+            ? 'bg-red-500 text-white hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 animate-pulse' 
+            : isTranscribing
+            ? 'bg-gray-400 text-white cursor-not-allowed'
+            : 'bg-gray-200 text-gray-600 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
+        } ${
+          disabled || isLoading ? 'opacity-50 cursor-not-allowed' : ''
+        }`}
+        disabled={disabled || isLoading || isTranscribing}
+        aria-label={isRecording ? "Arrêter l'enregistrement" : "Commencer l'enregistrement vocal"}
+      >
+        {isTranscribing ? (
+          <Loader2 className="h-5 w-5 animate-spin" />
+        ) : isRecording ? (
+          <MicOff className="h-5 w-5" />
+        ) : (
+          <Mic className="h-5 w-5" />
+        )}
+        <span className="absolute left-1/2 -translate-x-1/2 top-full mt-2 bg-gray-900 dark:bg-gray-700 text-white text-sm py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
+          {isRecording ? "Arrêter l'enregistrement" : isTranscribing ? "Transcription en cours..." : "Enregistrement vocal"}
+        </span>
+      </button>
       <button
         type="submit"
         className={`p-3 rounded-lg bg-blue-500 text-white hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center relative group ${

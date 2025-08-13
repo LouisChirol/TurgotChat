@@ -24,7 +24,7 @@ docker-compose down
 # Build and start containers
 docker-compose up -d --build
 
-# Show container status
+# Show container status 
 docker-compose ps
 
 echo "Deployment complete! Your application is running at https://turgotchat.fr"

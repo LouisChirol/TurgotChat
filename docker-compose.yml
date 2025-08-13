@@ -15,7 +15,6 @@ services:
     network_mode: "host"
     environment:
       - MISTRAL_API_KEY=${MISTRAL_API_KEY}
-      - TAVILY_API_KEY=${TAVILY_API_KEY}
       - REDIS_URL=redis://localhost:6379
     volumes:
       - ./backend/logs:/app/logs
@@ -30,3 +29,16 @@ services:
     ports:
       - "6379:6379"
     restart: unless-stopped 
+
+  db_updater:
+    build: ./database
+    environment:
+      - MISTRAL_API_KEY=${MISTRAL_API_KEY}
+    volumes:
+      - ./database/chroma_db:/app/database/chroma_db
+      - ./database/data:/app/database/data
+      - ./database/last_update.txt:/app/database/last_update.txt
+    profiles:
+      - maintenance
+    # Do not auto-run; we'll call it on-demand via cron
+    restart: "no"

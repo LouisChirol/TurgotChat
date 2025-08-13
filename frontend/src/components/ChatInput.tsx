@@ -109,7 +109,7 @@ const ChatInput = ({ onSendMessage, disabled = false, isLoading = false }: ChatI
           disabled || isLoading ? 'opacity-50 cursor-not-allowed' : ''
         }`}
         disabled={disabled || isLoading || isTranscribing}
-        aria-label={isRecording ? "Arrêter l'enregistrement" : "Commencer l'enregistrement vocal"}
+        aria-label={isRecording ? "Arrêter l'enregistrement" : "Commencer la dictée vocale"}
       >
         {isTranscribing ? (
           <Loader2 className="h-5 w-5 animate-spin" />
@@ -119,7 +119,7 @@ const ChatInput = ({ onSendMessage, disabled = false, isLoading = false }: ChatI
           <Mic className="h-5 w-5" />
         )}
         <span className="absolute left-1/2 -translate-x-1/2 top-full mt-2 bg-gray-900 dark:bg-gray-700 text-white text-sm py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-          {isRecording ? "Arrêter l'enregistrement" : isTranscribing ? "Transcription en cours..." : "Enregistrement vocal"}
+          {isRecording ? "Arrêter l'enregistrement" : isTranscribing ? "Transcription en cours..." : "Dictée vocale"}
         </span>
       </button>
       <button

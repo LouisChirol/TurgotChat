@@ -13,11 +13,25 @@ import { Bars3Icon } from '@heroicons/react/24/outline';
 import Image from 'next/image';
 import { useEffect, useMemo, useState } from 'react';
 
+const WELCOME_MESSAGE = `Bonjour ! Je suis Turgot, votre assistant pour les démarches administratives françaises. 🏛️
+
+Je peux vous répondre à vos questions à propos des documents d'identité, des impôts, des élections, du logement, etc. et vous citerai les sources utilisées.\n
+Voici un exemple de question: "Quel est le prix de renouvellement d'une carte d'identité en cas de perte?"
+
+Mes sources sont :
+
+- **👤 Les droits des particuliers** ([vosdroits.service-public.fr](https://vosdroits.service-public.fr))
+- **💼 Les démarches pour professionnels** ([entreprendre.service-public.fr](https://entreprendre.service-public.fr))
+
+Utilisez le filtre en haut à droite pour afficher uniquement ce qui vous intéresse !
+
+Comment puis-je vous aider aujourd\'hui ?`;
+
 export default function Home() {
   const [messages, setMessages] = useState([
     {
       id: '1',
-      content: 'Bonjour ! Je suis Turgot, votre assistant pour les démarches administratives françaises. 🏛️\n\nJe peux vous aider avec :\n\n- **👤 Les droits des particuliers** ([vosdroits.service-public.fr](https://vosdroits.service-public.fr))\n- **💼 Les démarches pour professionnels** ([entreprendre.service-public.fr](https://entreprendre.service-public.fr))\n\nUtilisez le filtre en haut à droite pour afficher uniquement les informations qui vous concernent !\n\nComment puis-je vous aider aujourd\'hui ?',
+      content: WELCOME_MESSAGE,
       isUser: false,
     },
   ]);
@@ -205,7 +219,7 @@ export default function Home() {
       setMessages([
         {
           id: '1',
-          content: 'Bonjour ! Je suis Turgot, votre assistant pour les démarches administratives françaises. 🏛️\n\nJe peux vous aider avec :\n\n- **👤 Les droits des particuliers** ([vosdroits.service-public.fr](https://vosdroits.service-public.fr))\n- **💼 Les démarches pour professionnels** ([entreprendre.service-public.fr](https://entreprendre.service-public.fr))\n\nUtilisez le filtre en haut à droite pour afficher uniquement les informations qui vous concernent !\n\nComment puis-je vous aider aujourd\'hui ?',
+          content: WELCOME_MESSAGE,
           isUser: false,
         },
       ]);

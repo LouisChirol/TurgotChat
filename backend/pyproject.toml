@@ -26,6 +26,12 @@ dependencies = [
     "reportlab>=4.1.0",
     "markdown-it-py>=3.0.0",
     "Pillow>=10.0.0",
+    "jupyter>=1.1.1",
+    "soundfile>=0.13.1",
+    "numpy>=1.26.4",
+    "gtts>=2.5.4",
+    "requests>=2.32.3",
+    "python-multipart>=0.0.20",
 ]
 requires-python = ">=3.11"
 

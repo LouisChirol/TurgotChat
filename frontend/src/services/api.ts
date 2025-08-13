@@ -65,4 +65,22 @@ export const getLastUpdate = async (): Promise<string> => {
   }
   const data = await response.json();
   return data.last_update;
+};
+
+export const transcribeAudio = async (audioBlob: Blob): Promise<string> => {
+  const formData = new FormData();
+  formData.append('audio', audioBlob, 'audio.mp3');
+  
+  const response = await fetch(`${API_URL}/transcribe`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || 'Failed to transcribe audio');
+  }
+
+  const data = await response.json();
+  return data.text;
 }; 

@@ -53,23 +53,23 @@ export function DisclaimerModal({ isOpen, onClose }: { isOpen: boolean; onClose:
         </div>
         <div className="prose prose-sm dark:prose-invert">
           <p className="mb-4">
-            Ce site est un projet indépendant, non affilié à l'État, au Gouvernement français, ni à aucune administration publique. Il ne constitue pas un service officiel.
+            Ce site est un projet indépendant, non affilié à l&apos;État, au Gouvernement français, ni à aucune administration publique. Il ne constitue pas un service officiel.
           </p>
           <p className="mb-4">
-            L'intelligence artificielle utilisée ici est basée sur des modèles génératifs de langage, susceptibles de produire des informations inexactes, obsolètes ou erronées. Aucune garantie n'est donnée quant à l'exactitude, la fiabilité ou l'exhaustivité des réponses fournies.
-            L'utilisateur reste seul responsable de l'usage qu'il fait des réponses générées.
+            L&#39;intelligence artificielle utilisée ici est basée sur des modèles génératifs de langage, susceptibles de produire des informations inexactes, obsolètes ou erronées. Aucune garantie n&#39;est donnée quant à l&#39;exactitude, la fiabilité ou l&#39;exhaustivité des réponses fournies.
+            L&#39;utilisateur reste seul responsable de l&#39;usage qu&#39;il fait des réponses générées.
           </p>
           <p className="mb-4">
-            Il est fortement recommandé de vérifier systématiquement les informations obtenues via d'autres sources fiables et officielles, en particulier pour toute décision personnelle, administrative, juridique ou médicale.
+            Il est fortement recommandé de vérifier systématiquement les informations obtenues via d&#39;autres sources fiables et officielles, en particulier pour toute décision personnelle, administrative, juridique ou médicale.
           </p>
           <p className="mb-4">
-            Aucune donnée personnelle n'est conservée, utilisée à des fins publicitaires ou transmise à des tiers. Les échanges sont temporaires et non stockés durablement.
+            Aucune donnée personnelle n&#39;est conservée, utilisée à des fins publicitaires ou transmise à des tiers. Les échanges sont temporaires et non stockés durablement.
           </p>
           <p className="mb-4">
             Ce projet est entièrement gratuit, non commercial, sans objectif lucratif.
           </p>
           <p>
-            En utilisant ce site, vous acceptez ces conditions et reconnaissez que la responsabilité du fournisseur du service ne saurait être engagée en cas de mauvaise interprétation, d'utilisation abusive ou de préjudice résultant des réponses de l'IA.
+            En utilisant ce site, vous acceptez ces conditions et reconnaissez que la responsabilité du fournisseur du service ne saurait être engagée en cas de mauvaise interprétation, d&#39;utilisation abusive ou de préjudice résultant des réponses de l&#39;IA.
           </p>
           <div className="mt-6 pt-4 border-t border-gray-200 text-center">
             <a

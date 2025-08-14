@@ -1,3 +1,4 @@
+import json
 import os
 import time
 from contextlib import asynccontextmanager
@@ -7,8 +8,9 @@ import uvicorn
 from app.core.graph_agent import TurgotGraphAgent
 from app.services.pdf import PDFService
 from app.services.transcription import TranscriptionService
-from fastapi import BackgroundTasks, FastAPI, HTTPException, File
+from fastapi import BackgroundTasks, FastAPI, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from loguru import logger
 from pydantic import BaseModel
 
@@ -21,14 +23,15 @@ logger.add(
     level="INFO",
     format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} - {message}",
     backtrace=True,
-    diagnose=True
+    diagnose=True,
 )
 # Also add console output for development/debugging
 logger.add(
     lambda msg: print(msg, end=""),
     level="INFO",
-    format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} - {message}"
+    format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} - {message}",
 )
+
 
 # Models
 class QuestionRequest(BaseModel):
@@ -143,6 +146,31 @@ async def chat(request: QuestionRequest):
         )
 
 
+@app.post("/chat-stream")
+async def chat_stream(request: QuestionRequest):
+    if not agent:
+        raise HTTPException(status_code=503, detail="Agent not initialized")
+
+    logger.info(f"Starting stream for session {request.session_id}")
+    start_time = time.time()
+
+    def event_generator():
+        try:
+            for item in agent.stream_answer(request.message, request.session_id):
+                yield f"data: {json.dumps(item)}\n\n"
+        except Exception as e:
+            logger.error(f"Streaming error: {e}")
+            yield f"data: {json.dumps({'type': 'chunk', 'content': 'Désolé, une erreur est survenue. Veuillez réessayer.'})}\n\n"
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+        finally:
+            duration = time.time() - start_time
+            logger.info(
+                f"Stream finished in {duration:.2f} seconds for session {request.session_id}"
+            )
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
 @app.post("/generate-pdf", response_model=PDFResponse)
 async def generate_pdf(request: PDFRequest, background_tasks: BackgroundTasks):
     """
@@ -162,6 +190,7 @@ async def generate_pdf(request: PDFRequest, background_tasks: BackgroundTasks):
         if request.session_id and not request.text:
             # Generate PDF from chat session
             from app.services.pdf import create_chat_pdf
+
             pdf_path = create_chat_pdf(request.session_id)
         elif request.text:
             # Generate PDF from markdown text
@@ -170,8 +199,7 @@ async def generate_pdf(request: PDFRequest, background_tasks: BackgroundTasks):
             )
         else:
             raise HTTPException(
-                status_code=422, 
-                detail="Either 'text' or 'session_id' must be provided"
+                status_code=422, detail="Either 'text' or 'session_id' must be provided"
             )
 
         # Schedule cleanup after 1 hour
@@ -234,13 +262,12 @@ async def clear_session(request: ClearSessionRequest):
 
     try:
         logger.info(f"Clearing session history for session {request.session_id}")
-        
+
         # Clear the session history using the Redis service
         agent.redis_service.clear_session_history(request.session_id)
-        
+
         return ClearSessionResponse(
-            success=True,
-            message=f"Session {request.session_id} cleared successfully"
+            success=True, message=f"Session {request.session_id} cleared successfully"
         )
 
     except Exception as e:
@@ -255,29 +282,26 @@ async def clear_session(request: ClearSessionRequest):
 async def transcribe_audio(audio: bytes = File(...)):
     """
     Transcribe audio to text using Voxtral API.
-    
+
     Args:
         audio: Raw audio file data
-        
+
     Returns:
         Transcribed text
     """
     try:
         logger.info("Starting audio transcription")
-        
+
         # Initialize transcription service
         transcription_service = TranscriptionService()
-        
+
         # Transcribe audio (assuming MP3 format for now)
         transcribed_text = transcription_service.transcribe_audio(audio, "mp3")
-        
+
         logger.info(f"Transcription completed: {len(transcribed_text)} characters")
-        
-        return TranscriptionResponse(
-            text=transcribed_text,
-            success=True
-        )
-        
+
+        return TranscriptionResponse(text=transcribed_text, success=True)
+
     except HTTPException:
         # Re-raise HTTPExceptions as-is
         raise
@@ -285,8 +309,7 @@ async def transcribe_audio(audio: bytes = File(...)):
         logger.error(f"Error during transcription: {str(e)}")
         logger.exception("Full traceback:")
         raise HTTPException(
-            status_code=500,
-            detail="Erreur lors de la transcription audio"
+            status_code=500, detail="Erreur lors de la transcription audio"
         )
 
 
@@ -308,21 +331,22 @@ async def get_last_update():
         else:  # Local development
             workspace_root = Path(__file__).parent.parent.parent.parent
             last_update_path = workspace_root / "database" / "last_update.txt"
-        
+
         if last_update_path.exists():
-            with open(last_update_path, 'r', encoding='utf-8') as f:
+            with open(last_update_path, "r", encoding="utf-8") as f:
                 last_update = f.read().strip()
         else:
             logger.warning(f"Last update file not found at {last_update_path}")
             last_update = "Date non disponible"
-        
+
         return LastUpdateResponse(last_update=last_update)
 
     except Exception as e:
         logger.error(f"Error reading last update: {str(e)}")
         logger.exception("Full traceback:")
         raise HTTPException(
-            status_code=500, detail="Erreur lors de la lecture de la date de mise à jour"
+            status_code=500,
+            detail="Erreur lors de la lecture de la date de mise à jour",
         )
 
 

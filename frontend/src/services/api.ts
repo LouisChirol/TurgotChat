@@ -40,6 +40,64 @@ export const sendMessage = async (message: string): Promise<ChatResponse> => {
   return response.json();
 };
 
+export const sendMessageStream = async (
+  message: string,
+  onChunk: (text: string) => void,
+  onSources?: (sources: Array<{ url: string; title: string; excerpt: string }>) => void
+): Promise<void> => {
+  const sessionId = getSessionId();
+  const response = await fetch(`${API_URL}/chat-stream`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'text/event-stream',
+    },
+    body: JSON.stringify({
+      message,
+      session_id: sessionId,
+    }),
+  });
+
+  if (!response.ok || !response.body) {
+    throw new Error('Failed to start streaming response');
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    const events = buffer.split('\n\n');
+    // Keep the last partial chunk in buffer
+    buffer = events.pop() || '';
+
+    for (const evt of events) {
+      const line = evt.trim();
+      if (!line.startsWith('data:')) continue;
+      const jsonStr = line.slice(5).trim();
+      if (!jsonStr) continue;
+      let payload: any;
+      try {
+        payload = JSON.parse(jsonStr);
+      } catch {
+        continue;
+      }
+      if (payload.type === 'chunk' && typeof payload.content === 'string') {
+        onChunk(payload.content);
+      } else if (payload.type === 'sources' && Array.isArray(payload.sources)) {
+        const mapped = payload.sources.map((url: string) => ({ url, title: url, excerpt: '' }));
+        onSources && onSources(mapped);
+      } else if (payload.type === 'done') {
+        return;
+      }
+    }
+  }
+};
+
 export const clearSession = async (): Promise<void> => {
   const sessionId = getSessionId();
   

@@ -88,7 +88,7 @@ cd turgot
 ```bash
 # Backend
 cp backend/.env.example backend/.env
-# Edit with your API keys (Mistral, Tavily, Redis URL)
+# Edit with your API keys (Mistral, Redis URL)
 
 # Frontend
 cp frontend/.env.example frontend/.env.local
@@ -133,7 +133,6 @@ cd ~/turgot && ./scripts/deploy.sh
 
 ```bash
 MISTRAL_API_KEY=your_mistral_api_key
-TAVILY_API_KEY=your_tavily_api_key
 REDIS_URL=redis://localhost:6379
 ```
 

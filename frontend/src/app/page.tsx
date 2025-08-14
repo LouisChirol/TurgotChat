@@ -7,22 +7,37 @@ import ConfirmationModal from '@/components/ConfirmationModal';
 import DataSourceFilter, { DataSourceType } from '@/components/DataSourceFilter';
 import { DarkModeButton, DisclaimerModal, InfoButton } from '@/components/Disclaimer';
 import SupportButton from '@/components/SupportButton';
-import { clearSession, sendMessage } from '@/services/api';
+import { clearSession, sendMessageStream } from '@/services/api';
 import { getSessionId } from '@/services/session';
 import { Bars3Icon } from '@heroicons/react/24/outline';
 import Image from 'next/image';
 import { useEffect, useMemo, useState } from 'react';
 
+const WELCOME_MESSAGE = `Bonjour ! Je suis Turgot, votre assistant pour les démarches administratives françaises. 🏛️
+
+Je peux vous répondre à vos questions à propos des documents d'identité, des impôts, des élections, du logement, etc. et vous citerai les sources utilisées.\n
+Voici un exemple de question: "Quel est le prix de renouvellement d'une carte d'identité en cas de perte?"
+
+Mes sources sont :
+
+- **👤 Les droits des particuliers** ([vosdroits.service-public.fr](https://vosdroits.service-public.fr))
+- **💼 Les démarches pour professionnels** ([entreprendre.service-public.fr](https://entreprendre.service-public.fr))
+
+Utilisez le filtre en haut à droite pour afficher uniquement ce qui vous intéresse !
+
+Comment puis-je vous aider aujourd\'hui ?`;
+
 export default function Home() {
   const [messages, setMessages] = useState([
     {
       id: '1',
-      content: 'Bonjour ! Je suis Turgot, votre assistant pour les démarches administratives françaises. 🏛️\n\nJe peux vous aider avec :\n\n- **👤 Les droits des particuliers** ([vosdroits.service-public.fr](https://vosdroits.service-public.fr))\n- **💼 Les démarches pour professionnels** ([entreprendre.service-public.fr](https://entreprendre.service-public.fr))\n\nUtilisez le filtre en haut à droite pour afficher uniquement les informations qui vous concernent !\n\nComment puis-je vous aider aujourd\'hui ?',
+      content: WELCOME_MESSAGE,
       isUser: false,
     },
   ]);
   const [isLoading, setIsLoading] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   const [isDisclaimerOpen, setIsDisclaimerOpen] = useState(false);
@@ -92,16 +107,25 @@ export default function Home() {
     };
 
     setMessages((prev) => [...prev, newMessage]);
-    setIsLoading(true);
+    setIsLoading(false);
+    setIsStreaming(true);
 
     try {
-      const response = await sendMessage(message);
-      const aiMessage = {
-        id: (Date.now() + 1).toString(),
-        content: response.answer,
-        isUser: false,
-      };
-      setMessages((prev) => [...prev, aiMessage]);
+      const assistantId = (Date.now() + 1).toString();
+      // Append an empty assistant message that will be filled progressively
+      setMessages((prev) => [...prev, { id: assistantId, content: '', isUser: false, isStreaming: true } as any]);
+
+      await sendMessageStream(
+        message,
+        (delta) => {
+          setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, content: (m.content || '') + delta } : m)));
+        },
+        (sources) => {
+          setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, sources } as any : m)));
+        }
+      );
+      // Mark message as no longer streaming
+      setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, isStreaming: false } : m)));
     } catch (error) {
       console.error('Error sending message:', error);
       const errorMessage = {
@@ -111,7 +135,7 @@ export default function Home() {
       };
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
-      setIsLoading(false);
+      setIsStreaming(false);
     }
   };
 
@@ -195,7 +219,7 @@ export default function Home() {
       setMessages([
         {
           id: '1',
-          content: 'Bonjour ! Je suis Turgot, votre assistant pour les démarches administratives françaises. 🏛️\n\nJe peux vous aider avec :\n\n- **👤 Les droits des particuliers** ([vosdroits.service-public.fr](https://vosdroits.service-public.fr))\n- **💼 Les démarches pour professionnels** ([entreprendre.service-public.fr](https://entreprendre.service-public.fr))\n\nUtilisez le filtre en haut à droite pour afficher uniquement les informations qui vous concernent !\n\nComment puis-je vous aider aujourd\'hui ?',
+          content: WELCOME_MESSAGE,
           isUser: false,
         },
       ]);
@@ -268,7 +292,7 @@ export default function Home() {
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="flex-1 overflow-y-auto">
           <div className="max-w-4xl mx-auto px-4 py-4">
-            <ChatInterface messages={filteredMessages} isLoading={isLoading} />
+            <ChatInterface messages={filteredMessages} isLoading={false} />
           </div>
         </div>
 
@@ -281,7 +305,7 @@ export default function Home() {
             <div className="flex-1 bg-red-600"></div>
           </div>
           <div className="max-w-4xl mx-auto px-4 py-4">
-            <ChatInput onSendMessage={handleSendMessage} isLoading={isLoading} />
+            <ChatInput onSendMessage={handleSendMessage} isLoading={isStreaming} />
           </div>
         </div>
       </div>

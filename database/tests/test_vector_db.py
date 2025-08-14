@@ -33,7 +33,7 @@ def test_vector_db():
 
     # Get a random document
     random_id = random.randint(0, count - 1)
-    random_doc = collection.get(ids=[collection.get()['ids'][random_id]])
+    random_doc = collection.get(ids=[collection.get()["ids"][random_id]])
     print("\nRandom document from database:")
     print(f"ID: {random_doc['ids'][0]}")
     print(f"Content: {random_doc['documents'][0][:500]}...")  # First 500 chars

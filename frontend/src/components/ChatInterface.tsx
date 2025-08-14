@@ -8,6 +8,7 @@ interface Message {
     id: string;
     content: string;
     isUser: boolean;
+    isStreaming?: boolean;
     sources?: Array<{
         url: string;
         title: string;
@@ -37,20 +38,34 @@ const ChatInterface = ({ messages, isLoading }: ChatInterfaceProps) => {
         scrollToBottom();
     }, [messages, isLoading]);
 
+    const hasStreamingEmpty = messages.some(
+        (m) => !m.isUser && m.isStreaming && (!m.content || m.content.trim() === '')
+    );
+
     return (
         <div className="flex flex-col h-full">
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                {messages.map((message) => (
-                    <Message
-                        key={message.id}
-                        role={message.isUser ? 'user' : 'assistant'}
-                        content={message.content}
-                        sources={message.sources}
-                        secondarySources={message.secondarySources}
-                        isError={message.isError}
-                    />
-                ))}
-                {isLoading && (
+                {messages
+                    .filter(
+                        (message) =>
+                            !(
+                                !message.isUser &&
+                                message.isStreaming &&
+                                (!message.content || message.content.trim() === '')
+                            )
+                    )
+                    .map((message) => (
+                        <Message
+                            key={message.id}
+                            role={message.isUser ? 'user' : 'assistant'}
+                            content={message.content}
+                            isStreaming={message.isStreaming}
+                            sources={message.sources}
+                            secondarySources={message.secondarySources}
+                            isError={message.isError}
+                        />
+                    ))}
+                {(isLoading || hasStreamingEmpty) && (
                     <div className="flex justify-start gap-3">
                         <div className="w-12 h-12 rounded-full overflow-hidden flex-shrink-0">
                             <Image

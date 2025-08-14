@@ -137,8 +137,12 @@ temp/
 Thumbs.db
 desktop.ini
 
-database/data
+# Database
+database/data*
 database/chroma_db
+database/chroma_db_toy
+
+# Backend
 backend/chroma_db
 *.ipynb
 *.txt

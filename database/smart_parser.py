@@ -183,7 +183,46 @@ class SmartXMLUpdater:
             persist_directory=PERSIST_DIR,
         )
 
-        self.initial_vector_count = int(self.vector_store._collection.count())
+        # Attempt to read initial vector count; if the collection/index is corrupted,
+        # reset the Chroma persistence while preserving the tracking DB.
+        def _reset_chroma_preserving_tracker():
+            try:
+                tracker_path = Path(TRACKING_DB_PATH)
+                backup_path = (
+                    tracker_path.with_suffix(".bak") if tracker_path.exists() else None
+                )
+                if backup_path:
+                    try:
+                        backup_path.unlink(missing_ok=True)
+                    except Exception:
+                        pass
+                    tracker_path.replace(backup_path)
+                # Wipe chroma persistence
+                import shutil
+
+                shutil.rmtree(PERSIST_DIR, ignore_errors=True)
+                Path(PERSIST_DIR).mkdir(parents=True, exist_ok=True)
+                # Restore tracker if we backed it up
+                if backup_path and backup_path.exists():
+                    backup_path.replace(tracker_path)
+            except Exception as e:
+                logger.warning(f"Failed to reset Chroma persistence: {e}")
+
+        try:
+            self.initial_vector_count = int(self.vector_store._collection.count())
+        except Exception as e:
+            logger.error(
+                f"Collection count failed ({e}). Attempting to reset Chroma persistence and rebuild."
+            )
+            _reset_chroma_preserving_tracker()
+            # Recreate vector store
+            self.vector_store = Chroma(
+                collection_name=COLLECTION_NAME,
+                embedding_function=self.embeddings,
+                persist_directory=PERSIST_DIR,
+            )
+            self.initial_vector_count = 0
+            self._force_rebuild = True
         logger.info(f"Initial vector count: {self.initial_vector_count}")
         # If vectors are empty but tracking exists, we want to force re-embedding unchanged files
         self._force_rebuild = self.initial_vector_count == 0
@@ -206,12 +245,16 @@ class SmartXMLUpdater:
         return sha.hexdigest()
 
     def _has_vectors_for_file(self, file_path: Path) -> bool:
-        """Return True if the collection currently has any vectors for this file."""
+        """Return True if at least one vector exists in Chroma for this file.
+
+        Uses a lightweight presence check with limit=1 and no payloads.
+        """
         try:
             res = self.vector_store._collection.get(
-                where={"source_file": str(file_path)}
+                where={"source_file": str(file_path)},
+                limit=1,
+                include=[],
             )
-            # Depending on chroma client version, `get` may return dict or an object; support both
             if isinstance(res, dict):
                 ids = res.get("ids", [])
             else:
@@ -219,29 +262,38 @@ class SmartXMLUpdater:
             return bool(ids)
         except Exception as e:
             logger.debug(f"Vector presence check failed for {file_path}: {e}")
-            # Be conservative: if uncertain, force re-embed to maintain correctness
+            # Be conservative: if uncertain, mark as missing so we re-embed
             return False
 
     def _file_status(self, file_path: Path) -> FileStatus:
         current_hash = self._compute_file_hash(file_path)
         stored = self.tracker.get_info(file_path)
         if stored is None:
+            # Should be seeded before status evaluation; treat as new as a fallback
             return FileStatus(file_path=file_path, status="new", previous_chunk_count=0)
-        # Content or mtime changed → updated
-        if (
-            stored.get("content_hash") != current_hash
-            or stored.get("last_modified") != file_path.stat().st_mtime
-        ):
+        # If vector store was reset, force re-embed all
+        if self._force_rebuild:
             return FileStatus(
                 file_path=file_path,
                 status="updated",
                 previous_chunk_count=int(stored.get("chunk_count", 0)),
             )
-        # Unchanged on disk; however, if vectors are missing (or store empty), re-embed
-        if self._force_rebuild or not self._has_vectors_for_file(file_path):
-            logger.info(
-                f"Vectors missing for unchanged file, scheduling re-embed: {file_path}"
+        # Only content hash determines change; ignore mtime because extraction updates timestamps
+        if stored.get("content_hash") != current_hash:
+            return FileStatus(
+                file_path=file_path,
+                status="updated",
+                previous_chunk_count=int(stored.get("chunk_count", 0)),
             )
+        # If previously not embedded (seeded with 0 chunks), embed now
+        if int(stored.get("chunk_count", 0)) <= 0:
+            return FileStatus(
+                file_path=file_path,
+                status="updated",
+                previous_chunk_count=0,
+            )
+        # If vectors are missing for this file (partial/incomplete store), embed now
+        if not self._has_vectors_for_file(file_path):
             return FileStatus(
                 file_path=file_path,
                 status="updated",
@@ -253,6 +305,33 @@ class SmartXMLUpdater:
             status="unchanged",
             previous_chunk_count=int(stored.get("chunk_count", 0)),
         )
+
+    def _seed_missing_tracker(self, all_files: List[Path]) -> int:
+        """Seed tracker entries for files not yet tracked (no embedding), fast path.
+
+        Records content_hash and data_source with chunk_count=0 so future runs can
+        detect changes without per-file vector lookups.
+        Returns number of files seeded.
+        """
+        seeded = 0
+        for file_path in all_files:
+            if self.tracker.get_info(file_path) is not None:
+                continue
+            try:
+                content_hash = self._compute_file_hash(file_path)
+                data_source = self._infer_data_source(file_path)
+                self.tracker.upsert(
+                    file_path=file_path,
+                    content_hash=content_hash,
+                    data_source=data_source,
+                    chunk_count=0,
+                )
+                seeded += 1
+            except Exception as e:
+                logger.debug(f"Seeding tracker failed for {file_path}: {e}")
+        if seeded:
+            logger.info(f"Seeded tracking for {seeded} files (no embedding)")
+        return seeded
 
     @staticmethod
     def _infer_data_source(file_path: Path) -> str:
@@ -425,6 +504,9 @@ class SmartXMLUpdater:
             self.stats["deleted_files"] = deleted
 
         all_files = self._collect_all_xml_files()
+        # Ensure tracker has entries for all files to avoid expensive vector presence checks
+        if self.initial_vector_count > 0:
+            self._seed_missing_tracker(all_files)
         file_statuses: List[FileStatus] = [self._file_status(p) for p in all_files]
 
         new_files = [fs for fs in file_statuses if fs.status == "new"]
@@ -433,11 +515,18 @@ class SmartXMLUpdater:
 
         self.stats["new_files"] = len(new_files)
         self.stats["updated_files"] = len(updated_files)
+        # Count backfill as unchanged for reporting purposes
         self.stats["unchanged_files"] = len(unchanged_files)
 
         # Baseline chunks (what would be embedded if we reprocessed everything)
         baseline_chunks = 0
         baseline_chunks += sum(fs.previous_chunk_count for fs in unchanged_files)
+
+        # Preview summary before any embedding begins
+        logger.info(
+            f"Planned actions — New: {len(new_files)}, Updated: {len(updated_files)}, "
+            f"Unchanged (skipped): {len(unchanged_files)}, Total: {len(all_files)}"
+        )
 
         # Process changed files with progress
         total_success = 0

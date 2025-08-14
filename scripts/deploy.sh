@@ -22,7 +22,7 @@ cp frontend/.env.production frontend/.env
 docker-compose down
 
 # Build and start containers
-docker-compose up -d --build
+docker compose up -d --build frontend backend redis
 
 # Show container status 
 docker-compose ps

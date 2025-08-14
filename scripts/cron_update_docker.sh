@@ -25,6 +25,13 @@ fi
 flock -n "$LOCK_FILE" bash -c '
   set -e
   docker compose stop backend || true
+  # Wait up to 30s for backend container to fully stop and release file handles
+  for i in $(seq 1 30); do
+    if [ -z "$(docker compose ps -q backend)" ] || [ "$(docker inspect -f {{.State.Running}} $(docker compose ps -q backend) 2>/dev/null || echo false)" = "false" ]; then
+      break
+    fi
+    sleep 1
+  done
   docker compose --profile maintenance run --rm db_updater
   docker compose start backend || true
 '

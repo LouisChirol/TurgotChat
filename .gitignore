@@ -141,6 +141,7 @@ desktop.ini
 database/data*
 database/chroma_db
 database/chroma_db_toy
+database/backups
 
 # Backend
 backend/chroma_db

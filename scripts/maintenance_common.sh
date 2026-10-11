@@ -120,8 +120,13 @@ maintenance_start_backend() {
 }
 
 maintenance_verify_chroma() {
+  local repo script
+  repo="$(maintenance_repo)"
+  script="$repo/backend/scripts/verify_chroma.py"
   echo "Verifying Chroma..."
-  docker compose run --rm --no-deps backend python scripts/verify_chroma.py
+  docker compose run --rm --no-deps \
+    -v "${script}:/app/scripts/verify_chroma.py:ro" \
+    backend python scripts/verify_chroma.py
 }
 
 maintenance_verify_api() {

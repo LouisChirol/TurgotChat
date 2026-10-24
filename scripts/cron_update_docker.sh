@@ -16,7 +16,7 @@ run_sp_job() {
   maintenance_preflight || return 1
   maintenance_backup_chroma
 
-  docker compose --profile maintenance build db_updater || return $?
+  maintenance_build_db_updater || return $?
   maintenance_stop_backend
 
   docker compose --profile maintenance run --rm db_updater || exit_code=$?

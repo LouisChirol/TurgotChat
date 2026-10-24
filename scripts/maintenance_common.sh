@@ -58,6 +58,47 @@ maintenance_docker_prune() {
   docker builder prune -f --filter "until=168h" 2>/dev/null || true
 }
 
+maintenance_wait_for_dns() {
+  local host="${1:-auth.docker.io}"
+  local attempt
+  for attempt in 1 2 3 4 5; do
+    if getent hosts "$host" >/dev/null 2>&1; then
+      return 0
+    fi
+    echo "DNS lookup for ${host} failed (attempt ${attempt}/5)..."
+    resolvectl flush-caches 2>/dev/null || true
+    sleep $((attempt * 5))
+  done
+  echo "ERROR: DNS still failing for ${host}"
+  return 1
+}
+
+maintenance_ensure_db_updater_base_image() {
+  local base_image="${MAINTENANCE_DB_UPDATER_BASE_IMAGE:-python:3.13-slim}"
+  if docker image inspect "${base_image}" >/dev/null 2>&1; then
+    echo "Base image ${base_image} already present locally."
+    return 0
+  fi
+  echo "Base image ${base_image} missing; pulling with retries..."
+  maintenance_wait_for_dns auth.docker.io || return 1
+  local attempt
+  for attempt in 1 2 3 4 5; do
+    if docker pull "${base_image}"; then
+      return 0
+    fi
+    echo "docker pull failed (attempt ${attempt}/5)..."
+    maintenance_wait_for_dns registry-1.docker.io || true
+    sleep $((attempt * 10))
+  done
+  return 1
+}
+
+maintenance_build_db_updater() {
+  maintenance_ensure_db_updater_base_image || return 1
+  echo "Building db_updater from local base (--pull=never)..."
+  docker compose --profile maintenance build --pull=never db_updater
+}
+
 maintenance_backup_chroma() {
   local repo backup_root ts dest
   repo="$(maintenance_repo)"
@@ -179,7 +220,8 @@ $(declare -f maintenance_preflight maintenance_backup_chroma maintenance_stop_ba
   maintenance_start_backend maintenance_verify_stack maintenance_recover_backend \
   maintenance_docker_prune maintenance_repo maintenance_disk_avail_gb \
   maintenance_restore_chroma_backup maintenance_prune_old_backups \
-  maintenance_verify_chroma maintenance_verify_api)
+  maintenance_verify_chroma maintenance_verify_api maintenance_build_db_updater \
+  maintenance_ensure_db_updater_base_image maintenance_wait_for_dns)
 $(declare -f "$job_fn")
 $job_fn"
 

@@ -69,6 +69,8 @@ Both crons use `scripts/maintenance_common.sh`:
 
 `database/.dockerignore` keeps `chroma_db/` and `data/` out of the `db_updater` image build context.
 
+`db_updater` builds use `docker compose build --pull=never` after ensuring `python:3.13-slim` exists locally (pull only when missing, with DNS retries). This avoids Monday 03:00 failures when `auth.docker.io` lookups flap on the host resolver.
+
 Manual BOFiP run on server:
 
 ```bash

@@ -94,9 +94,12 @@ maintenance_ensure_db_updater_base_image() {
 }
 
 maintenance_build_db_updater() {
+  local repo
+  repo="$(maintenance_repo)"
   maintenance_ensure_db_updater_base_image || return 1
-  echo "Building db_updater from local base (--pull=never)..."
-  docker compose --profile maintenance build --pull=never db_updater
+  echo "Building db_updater image (pull=false, local base only)..."
+  # compose v2.24 only supports boolean --pull; plain `docker build` avoids Hub metadata checks.
+  docker build --pull=false -t turgot-db_updater -f "${repo}/database/Dockerfile" "${repo}/database"
 }
 
 maintenance_backup_chroma() {

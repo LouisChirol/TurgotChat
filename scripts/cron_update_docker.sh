@@ -21,6 +21,9 @@ run_sp_job() {
 
   docker compose --profile maintenance run --rm db_updater || exit_code=$?
   if [ "$exit_code" -eq 0 ]; then
+    maintenance_verify_chroma_pre_backend || exit_code=$?
+  fi
+  if [ "$exit_code" -eq 0 ]; then
     echo "Running retrieval evaluation set..."
     docker compose run --rm backend python scripts/run_retrieval_eval.py || exit_code=$?
   else

@@ -164,13 +164,19 @@ maintenance_start_backend() {
 }
 
 maintenance_verify_chroma() {
-  local repo script
+  local repo
   repo="$(maintenance_repo)"
-  script="$repo/backend/scripts/verify_chroma.py"
-  echo "Verifying Chroma..."
-  docker compose run --rm --no-deps \
-    -v "${script}:/app/scripts/verify_chroma.py:ro" \
-    backend python scripts/verify_chroma.py
+  echo "Verifying Chroma (db_updater image, same client as embed)..."
+  docker run --rm \
+    -v "${repo}/database/chroma_db:/app/database/chroma_db" \
+    turgot-db_updater python -c "
+from chromadb import PersistentClient
+c = PersistentClient(path='/app/database/chroma_db')
+for name in ('service_public', 'bofip'):
+    n = c.get_collection(name).count()
+    assert n > 0, f'{name} empty'
+    print(f'OK: {name} count={n}')
+"
 }
 
 maintenance_verify_api() {
@@ -182,20 +188,26 @@ maintenance_verify_stack() {
   maintenance_verify_chroma && maintenance_verify_api
 }
 
+# After embed, before bringing API back: ensure Chroma opens with the updater client.
+maintenance_verify_chroma_pre_backend() {
+  maintenance_verify_chroma
+}
+
 maintenance_recover_backend() {
   local exit_code=0
-  if ! maintenance_verify_stack; then
-    echo "ERROR: post-maintenance verification failed; restoring chroma backup."
-    maintenance_restore_chroma_backup || exit_code=$?
-    maintenance_start_backend || exit_code=$?
-    if maintenance_verify_stack; then
-      echo "Recovered using chroma backup; investigate failed maintenance run."
-      return 1
-    fi
-    echo "CRITICAL: backend unhealthy after chroma restore."
+  if maintenance_verify_api; then
+    echo "API healthy after maintenance."
+    return 0
+  fi
+  echo "ERROR: API unhealthy after maintenance; restoring chroma backup."
+  maintenance_restore_chroma_backup || exit_code=$?
+  maintenance_start_backend || exit_code=$?
+  if maintenance_verify_api; then
+    echo "Recovered using chroma backup; investigate failed maintenance run."
     return 1
   fi
-  return 0
+  echo "CRITICAL: API still unhealthy after chroma restore."
+  return 1
 }
 
 # flock wrapper: runs job function name passed as $3 inside lock.
@@ -224,7 +236,8 @@ $(declare -f maintenance_preflight maintenance_backup_chroma maintenance_stop_ba
   maintenance_docker_prune maintenance_repo maintenance_disk_avail_gb \
   maintenance_restore_chroma_backup maintenance_prune_old_backups \
   maintenance_verify_chroma maintenance_verify_api maintenance_build_db_updater \
-  maintenance_ensure_db_updater_base_image maintenance_wait_for_dns)
+  maintenance_ensure_db_updater_base_image maintenance_wait_for_dns \
+  maintenance_verify_chroma_pre_backend maintenance_verify_stack)
 $(declare -f "$job_fn")
 $job_fn"
 

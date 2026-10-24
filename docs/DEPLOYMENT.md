@@ -57,7 +57,19 @@ Verify: `https://turgot.louischirol.fr` and `https://turgot.louischirol.fr/api/`
 | Service-Public | Mon 03:00 | `scripts/cron_update_docker.sh` | Download SP XML, delta embed `service_public`, retrieval eval |
 | BOFiP | 1st of month 04:00 | `scripts/cron_bofip_update_docker.sh` | Download BOFiP API, delta embed `bofip` (hash tracking) |
 
-BOFiP cron uses `BOFIP_MAX_COST_USD` (default `5.00`) against **delta** embed estimate only. Logs: `~/turgot/logs/bofip_update_*.log`.
+BOFiP cron uses `BOFIP_MAX_COST_USD` (default `5.00`) against **delta** embed estimate only. Logs: `~/turgot/logs/bofip_update_*.log` and `db_update_*.log`.
+
+Both crons use `scripts/maintenance_common.sh`:
+
+1. **Preflight** — abort (backend stays up) if free disk on `/` is below `MAINTENANCE_MIN_FREE_GB` (default `15`), then prune Docker images/build cache older than 7 days.
+2. **Backup** — `rsync` of `database/chroma_db/` to `database/backups/chroma_<timestamp>/` (keep last 2).
+3. Run `db_updater` with backend stopped.
+4. **Verify** — `backend/scripts/verify_chroma.py` and `curl` to `MAINTENANCE_API_URL` (default `https://turgot.louischirol.fr/api/`).
+5. On verify failure — restore the backup snapshot and restart backend.
+
+`database/.dockerignore` keeps `chroma_db/` and `data/` out of the `db_updater` image build context.
+
+`db_updater` builds use `docker build --pull=false` after ensuring `python:3.13-slim` exists locally (pull only when missing, with DNS retries). This avoids Monday 03:00 failures when `auth.docker.io` lookups flap on the host resolver.
 
 Manual BOFiP run on server:
 

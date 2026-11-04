@@ -31,7 +31,7 @@ run_sp_job() {
   fi
 
   maintenance_start_backend || exit_code=$?
-  maintenance_recover_backend || exit_code=$?
+  maintenance_verify_and_recover || exit_code=$?
   return "$exit_code"
 }
 

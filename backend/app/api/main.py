@@ -6,6 +6,7 @@ from typing import Optional
 
 import uvicorn
 from app.core.graph_agent import TurgotGraphAgent
+from app.health import chroma_is_healthy, maintenance_data_document
 from app.services.document_upload import (
     MAX_UPLOAD_BYTES,
     MAX_UPLOAD_PAGES,
@@ -24,7 +25,7 @@ from fastapi import (
     UploadFile,
 )
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from loguru import logger
 from prometheus_client import Counter, Histogram
 from prometheus_fastapi_instrumentator import Instrumentator
@@ -227,10 +228,37 @@ Instrumentator().instrument(app).expose(
 )
 
 
+def _chroma_ready() -> bool:
+    """Live Chroma read against the client opened during startup."""
+    if chroma_is_healthy(agent):
+        return True
+    logger.warning("Chroma health check failed")
+    return False
+
+
 @app.get("/")
 async def root():
-    """Health check endpoint."""
+    """Health check. The 200 body is part of the existing client contract."""
+    if not _chroma_ready():
+        raise HTTPException(status_code=503, detail="Chroma unavailable")
     return {"message": "Turgot API is running"}
+
+
+@app.get("/health")
+async def health():
+    """Same Chroma probe as ``/``, with an explicit chroma field."""
+    if not _chroma_ready():
+        raise HTTPException(status_code=503, detail="Chroma unavailable")
+    return {"message": "Turgot API is running", "chroma": "ok"}
+
+
+@app.get("/health/data")
+async def health_data():
+    """Read-only maintenance status. No secrets, host paths, or internal hostnames."""
+    return JSONResponse(
+        content=maintenance_data_document(),
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @app.post("/chat", response_model=QuestionResponse)

@@ -24,7 +24,7 @@ run_bofip_job() {
     python -m sources.bofip.run_update --max-cost-usd "${BOFIP_MAX_COST_USD}" || exit_code=$?
 
   maintenance_start_backend || exit_code=$?
-  maintenance_recover_backend || exit_code=$?
+  maintenance_verify_and_recover || exit_code=$?
   return "$exit_code"
 }
 

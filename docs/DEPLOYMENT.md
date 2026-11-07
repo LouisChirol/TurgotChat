@@ -78,6 +78,54 @@ cd ~/turgot
 BOFIP_MAX_COST_USD=5.00 ./scripts/cron_bofip_update_docker.sh
 ```
 
+## Monitoring crons without SSH
+
+Maintenance jobs can ping [healthchecks.io](https://healthchecks.io)-style URLs and publish a small status document. Both are optional: if the ping URLs are unset, the jobs behave as before.
+
+### Ping URLs
+
+Add these to `~/turgot/.env` (the cron `source`s that file). Use each check's base ping URL, with no `/start` or `/fail` suffix. Leave a variable unset to skip that ping. A ping uses a 10s timeout and cannot fail the job.
+
+```bash
+HC_SERVICE_PUBLIC_URL=https://hc-ping.com/<service-public-uuid>
+HC_BOFIP_URL=https://hc-ping.com/<bofip-uuid>
+HC_BACKUP_URL=https://hc-ping.com/<backup-uuid>
+HC_VERIFY_URL=https://hc-ping.com/<verify-uuid>
+```
+
+| Env var | When it pings | Healthchecks period | Grace |
+|---------|---------------|---------------------|-------|
+| `HC_SERVICE_PUBLIC_URL` | `scripts/cron_update_docker.sh` (Mon 03:00) | 7 days | 1 day |
+| `HC_BOFIP_URL` | `scripts/cron_bofip_update_docker.sh` (1st of the month, 04:00) | 31 days | 2 days |
+| `HC_BACKUP_URL` | Chroma snapshot at the start of each of those jobs (at least weekly, again on the monthly run) | 7 days | 1 day |
+| `HC_VERIFY_URL` | API verify/restore at the end of each of those jobs | 7 days | 1 day |
+
+The host crontab's timezone is the clock those schedules use. Pings are `$URL/start` when the step starts, `$URL` on success, and `$URL/fail` on failure. The failure request body is the last lines of that run's log.
+
+Create the checks:
+
+1. Sign in at [healthchecks.io](https://healthchecks.io) and choose **Add Check**.
+2. Name them after the four rows above. Schedule type **Simple**.
+3. Set **Period** and **Grace** from the table (weekly jobs: period 7 days, grace 1 day; monthly BOFiP: period 31 days, grace 2 days).
+4. Save, and copy the **Ping URL** into the matching variable in `~/turgot/.env`. Do not commit that file.
+5. A new check expects a ping within period + grace. After creating one, send a single success ping so it does not alert before the next real run: `curl -fsS --max-time 10 "$HC_SERVICE_PUBLIC_URL"` (and the same for the other three).
+
+### Status file and public endpoint
+
+At the end of each job the cron updates `backend/logs/maintenance_status.json` (override with `MAINTENANCE_STATUS_PATH`). The existing backend mount `./backend/logs:/app/logs` makes that file visible in the container. No compose change is required. The host needs `python3` (stdlib only) so the cron can update the file; a writer failure is logged and does not fail the job.
+
+`GET /api/health/data` (backend route `GET /health/data`) returns that document. Timestamps are UTC. Each job has `last_run_at`, `last_success_at`, `status` (`ok`, `error`, or `unknown`), `duration_seconds`, and a short `error`. The document also has `newest_backup_at` and `collections` (document counts). Paths, internal hostnames, addresses, and secret-like tokens are stripped. The response does not include the status file path.
+
+`GET /api/` and `GET /api/health` read the Chroma collection the process already has open. When that read works, `/api/` is still exactly `{"message":"Turgot API is running"}`. When it does not, both routes return HTTP 503 with `{"detail":"Chroma unavailable"}`. The deploy workflow's `curl` of `/` and the maintenance API check use that status code.
+
+### Deploying this
+
+1. Create the four healthchecks.io checks and set the env vars on the VPS (above).
+2. Merge PR **#18** (`feat/maintenance-hardening`) into `master`, then merge the observability PR that stacks on it.
+3. The push to `master` publishes the backend image and restarts it (this adds `/api/health` and `/api/health/data`).
+4. On the VPS, `cd ~/turgot && git pull` so `scripts/maintenance_common.sh`, the cron entrypoints, and `backend/app/maintenance_status.py` match that image. Cron reads the scripts from the repo checkout, not from the image.
+5. Check from outside: `https://turgot.louischirol.fr/api/` (same running message when Chroma answers), `https://turgot.louischirol.fr/api/health`, and `https://turgot.louischirol.fr/api/health/data`.
+
 ## Manual rollback
 
 ```bash

@@ -65,7 +65,7 @@ turgot/
 - **Containerization**: Docker and Docker Compose
 - **Web Server**: Nginx with SSL termination
 - **Deployment**: Automated scripts for server deployment
-- **Monitoring**: Structured logging and health checks
+- **Monitoring**: Structured logging, Chroma health checks, and optional cron heartbeats
 
 ## Quick Start
 
@@ -136,6 +136,21 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 NEXT_PUBLIC_APP_NAME=Turgot
 NEXT_PUBLIC_APP_DESCRIPTION=Assistant pour l'administration française
 ```
+
+## Maintenance monitoring
+
+Weekly Service-Public and monthly BOFiP crons can report in without SSH. Details, including how to create the healthchecks.io checks and how to deploy, are in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
+Set these in the server `~/turgot/.env` (unset means that ping is skipped and the job still runs):
+
+```bash
+HC_SERVICE_PUBLIC_URL=   # weekly update; healthchecks period 7d, grace 1d
+HC_BOFIP_URL=            # monthly update; period 31d, grace 2d
+HC_BACKUP_URL=           # chroma snapshot inside those jobs; period 7d, grace 1d
+HC_VERIFY_URL=           # post-update verify; period 7d, grace 1d
+```
+
+Each value is the check's base ping URL. The job calls `$URL/start`, `$URL` on success, and `$URL/fail` on failure. After a run, `GET /api/health/data` returns the last status, backup time, and Chroma collection counts. `GET /api/` stays `{"message":"Turgot API is running"}` when Chroma answers, and returns 503 when it does not.
 
 ## Data Management
 

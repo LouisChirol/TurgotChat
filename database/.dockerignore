@@ -1,0 +1,8 @@
+chroma_db/
+chroma_db_toy/
+data/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.venv/
+*.log

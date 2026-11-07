@@ -1,8 +1,11 @@
+import time
 import zipfile
 from datetime import datetime
 from pathlib import Path
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 # URLs for the archives
 stable_urls = {
@@ -24,17 +27,51 @@ stable_urls = {
     ),
 }
 
+DOWNLOAD_TIMEOUT_SEC = 120
+DOWNLOAD_RETRIES = 5
+
+
+def _session() -> requests.Session:
+    retry = Retry(
+        total=DOWNLOAD_RETRIES,
+        connect=DOWNLOAD_RETRIES,
+        read=DOWNLOAD_RETRIES,
+        backoff_factor=2,
+        status_forcelist=(429, 500, 502, 503, 504),
+        allowed_methods=("GET", "HEAD"),
+        raise_on_status=False,
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    sess = requests.Session()
+    sess.mount("https://", adapter)
+    sess.mount("http://", adapter)
+    return sess
+
 
 def download_file(url: str, output_path: Path) -> None:
-    """Download a file from a URL to the specified path."""
+    """Download a file from a URL to the specified path (atomic replace)."""
     print(f"Downloading {url}...")
-    response = requests.get(url, stream=True)
-    response.raise_for_status()
-
-    with open(output_path, "wb") as f:
-        for chunk in response.iter_content(chunk_size=8192):
-            f.write(chunk)
-    print(f"Downloaded to {output_path}")
+    part_path = output_path.with_suffix(output_path.suffix + ".part")
+    sess = _session()
+    last_error: Exception | None = None
+    for attempt in range(1, DOWNLOAD_RETRIES + 1):
+        try:
+            response = sess.get(url, stream=True, timeout=DOWNLOAD_TIMEOUT_SEC)
+            response.raise_for_status()
+            with open(part_path, "wb") as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+            part_path.replace(output_path)
+            print(f"Downloaded to {output_path}")
+            return
+        except (requests.RequestException, OSError) as exc:
+            last_error = exc
+            part_path.unlink(missing_ok=True)
+            wait = min(2**attempt, 60)
+            print(f"Download attempt {attempt}/{DOWNLOAD_RETRIES} failed: {exc}; retry in {wait}s")
+            time.sleep(wait)
+    raise RuntimeError(f"Failed to download {url} after {DOWNLOAD_RETRIES} attempts") from last_error
 
 
 def extract_archive(archive_path: Path, extract_to: Path) -> None:
@@ -45,26 +82,19 @@ def extract_archive(archive_path: Path, extract_to: Path) -> None:
     print(f"Extracted to {extract_to}")
 
 
-def main():
-    # Create data directory if it doesn't exist
+def main() -> None:
     data_dir = Path("data")
     data_dir.mkdir(exist_ok=True)
 
-    # Process each source in stable_urls
     for source_name, (url, dest_dir) in stable_urls.items():
         print(f"\nProcessing {source_name}...")
-
-        # Create destination directory
         dest_path = Path(dest_dir)
         dest_path.parent.mkdir(parents=True, exist_ok=True)
-
-        # Download and extract
         zip_path = data_dir / f"{source_name}.zip"
         download_file(url, zip_path)
         extract_archive(zip_path, dest_path)
-        zip_path.unlink()  # Remove the zip file after extraction
+        zip_path.unlink()
 
-    # Update last_update.txt with current date
     update_date = datetime.now().strftime("%d/%m/%Y")
     with open("last_update.txt", "w") as f:
         f.write(update_date)

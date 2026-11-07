@@ -294,6 +294,7 @@ dependencies = [
     { name = "langchain" },
     { name = "langchain-chroma" },
     { name = "langchain-mistralai" },
+    { name = "langchain-text-splitters" },
     { name = "loguru" },
     { name = "mistralai" },
     { name = "python-dotenv" },
@@ -304,11 +305,12 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "backoff", specifier = ">=2.2.1" },
-    { name = "chromadb", specifier = ">=0.4.22" },
+    { name = "chromadb", specifier = ">=1.0.9,<1.1" },
     { name = "ipykernel", specifier = ">=6.29.5" },
     { name = "langchain", specifier = ">=0.1.0" },
     { name = "langchain-chroma", specifier = ">=0.0.1" },
     { name = "langchain-mistralai", specifier = ">=0.0.1" },
+    { name = "langchain-text-splitters", specifier = ">=0.3.0" },
     { name = "loguru", specifier = ">=0.7.3" },
     { name = "mistralai", specifier = ">=0.0.12" },
     { name = "python-dotenv", specifier = ">=1.0.0" },

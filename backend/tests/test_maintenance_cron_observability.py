@@ -63,7 +63,11 @@ def test_hc_ping_never_fails_the_caller_and_hides_the_url(tmp_path: Path):
     )
     curl_bin.chmod(0o755)
     job_log = tmp_path / "job.log"
-    job_log.write_text("ERROR: disk full at /home/ubuntu/turgot\n", encoding="utf-8")
+    job_log.write_text(
+        "earlier token=keep-me-out should not be uploaded\n"
+        "ERROR: disk full at /home/ubuntu/turgot token=sekrit\n",
+        encoding="utf-8",
+    )
 
     script = textwrap.dedent(
         f"""\
@@ -88,6 +92,11 @@ def test_hc_ping_never_fails_the_caller_and_hides_the_url(tmp_path: Path):
     assert f"{PING_URL}/start" in calls
     assert f"{PING_URL}/fail" in calls
     assert "disk full" in calls
+    assert "token=[redacted]" in calls
+    assert "[path]" in calls
+    assert "sekrit" not in calls
+    assert "keep-me-out" not in calls
+    assert "/home/ubuntu" not in calls
     # success ping is the base URL, not /success
     assert f"{PING_URL}/success" not in calls
 
@@ -205,7 +214,50 @@ def test_flock_job_pings_start_and_success_without_logging_the_url(tmp_path: Pat
     assert PING_URL in calls
 
 
-def test_flock_job_failure_pings_fail_with_log_tail(tmp_path: Path):
+def test_hc_fail_ping_without_python_does_not_send_the_log(tmp_path: Path):
+    curl_log = tmp_path / "curl.log"
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    curl_bin = bin_dir / "curl"
+    curl_bin.write_text(
+        textwrap.dedent(
+            f"""\
+            #!/bin/sh
+            printf 'ARGS:%s\\n' "$*" >> "{curl_log}"
+            case "$*" in
+              *--data-binary*) cat >> "{curl_log}" ;;
+            esac
+            exit 0
+            """
+        ),
+        encoding="utf-8",
+    )
+    curl_bin.chmod(0o755)
+    python_bin = bin_dir / "python3"
+    python_bin.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+    python_bin.chmod(0o755)
+    job_log = tmp_path / "job.log"
+    job_log.write_text("token=sekrit /home/ubuntu/turgot\n", encoding="utf-8")
+    script = textwrap.dedent(
+        f"""\
+        set -euo pipefail
+        export PATH="{bin_dir}:/usr/bin:/bin"
+        # shellcheck disable=SC1091
+        source "{COMMON}"
+        maintenance_hc_ping "{PING_URL}" fail "{job_log}"
+        echo PING_OK
+        """
+    )
+    result = _run(script)
+    assert result.returncode == 0, result.stderr
+    assert "PING_OK" in result.stdout
+    calls = curl_log.read_text(encoding="utf-8")
+    assert "job failed" in calls
+    assert "sekrit" not in calls
+    assert "/home/ubuntu" not in calls
+
+
+def test_flock_job_failure_pings_fail_with_sanitized_line(tmp_path: Path):
     repo = tmp_path / "repo"
     repo.mkdir()
     bin_dir = _fake_tools(tmp_path)
@@ -221,7 +273,11 @@ def test_flock_job_failure_pings_fail_with_log_tail(tmp_path: Path):
         export HC_VERIFY_URL=""
         # shellcheck disable=SC1091
         source "{COMMON}"
-        run_bad_job() {{ echo "ERROR: embed refused"; return 3; }}
+        run_bad_job() {{
+          echo "token=sekrit in the middle of the log"
+          echo "ERROR: embed refused"
+          return 3
+        }}
         maintenance_with_flock bofip_update "{lock}" run_bad_job
         """
     )
@@ -231,8 +287,10 @@ def test_flock_job_failure_pings_fail_with_log_tail(tmp_path: Path):
     assert f"{PING_URL}/start" in calls
     assert f"{PING_URL}/fail" in calls
     assert "embed refused" in calls
+    assert "sekrit" not in calls
     log_text = "\n".join(path.read_text(encoding="utf-8") for path in (repo / "logs").glob("*.log"))
     assert PING_URL not in log_text
+    assert "sekrit" in log_text
 
 
 def test_lock_held_does_not_ping(tmp_path: Path):

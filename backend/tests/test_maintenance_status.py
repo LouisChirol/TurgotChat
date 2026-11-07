@@ -242,3 +242,27 @@ def test_host_python_cli_record_and_newest_backup(tmp_path: Path):
     assert rejected.returncode == 1
     assert "ValueError" in rejected.stderr
     assert "not-a-job" not in rejected.stderr
+
+
+def test_sanitize_error_cli_strips_secrets_and_paths():
+    cleaned = subprocess.run(
+        [HOST_PYTHON, str(STATUS_SCRIPT), "sanitize-error"],
+        input="token=sekrit at /home/ubuntu/turgot\n",
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert cleaned.stderr == ""
+    assert "sekrit" not in cleaned.stdout
+    assert "/home/ubuntu" not in cleaned.stdout
+    assert "token=[redacted]" in cleaned.stdout
+    assert "[path]" in cleaned.stdout
+
+    empty = subprocess.run(
+        [HOST_PYTHON, str(STATUS_SCRIPT), "sanitize-error"],
+        input="   \n",
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert empty.stdout.strip() == "job failed"

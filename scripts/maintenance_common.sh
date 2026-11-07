@@ -235,12 +235,13 @@ maintenance_recover_backend() {
 }
 
 # Ping a healthchecks.io-style URL. Never fails the caller.
-# event: start -> $URL/start, success -> $URL, fail -> $URL/fail (log tail as body).
+# event: start -> $URL/start, success -> $URL,
+# fail -> $URL/fail with one sanitized line (not the raw log).
 maintenance_hc_ping() {
   local url="${1:-}"
   local event="${2:-success}"
   local logfile="${3:-}"
-  local target
+  local target body
 
   if [ -z "$url" ]; then
     return 0
@@ -258,7 +259,8 @@ maintenance_hc_ping() {
   esac
 
   if [ "$event" = "fail" ] && [ -n "$logfile" ] && [ -f "$logfile" ]; then
-    tail -c 8000 "$logfile" 2>/dev/null | tail -n 40 | curl \
+    body="$(maintenance_hc_fail_body "$logfile")"
+    printf '%s' "$body" | curl \
       --silent --show-error \
       --max-time 10 --connect-timeout 5 \
       --retry 0 \
@@ -301,7 +303,43 @@ maintenance_status_job_name() {
 }
 
 maintenance_status_py() {
-  printf '%s' "$(maintenance_repo)/backend/app/maintenance_status.py"
+  local candidate
+  candidate="$(maintenance_repo)/backend/app/maintenance_status.py"
+  if [ -f "$candidate" ]; then
+    printf '%s' "$candidate"
+    return 0
+  fi
+  # Cron tests and a partial checkout may not set REPO. The writer lives next
+  # to this script in the git tree.
+  candidate="$(cd "$(dirname "${_MAINTENANCE_SELF}")/.." && pwd)/backend/app/maintenance_status.py"
+  printf '%s' "$candidate"
+}
+
+# One line safe to POST to healthchecks.io. Falls back to a fixed phrase so a
+# missing interpreter cannot leak the raw log line.
+maintenance_sanitize_for_ping() {
+  local message="${1-}"
+  local py clean
+  if [ -z "$message" ]; then
+    printf '%s' "job failed"
+    return 0
+  fi
+  py="$(maintenance_status_py)"
+  if [ -f "$py" ] && command -v python3 >/dev/null 2>&1; then
+    clean="$(printf '%s' "$message" | python3 "$py" sanitize-error 2>/dev/null || true)"
+    if [ -n "$clean" ]; then
+      printf '%s' "$clean"
+      return 0
+    fi
+  fi
+  printf '%s' "job failed"
+}
+
+maintenance_hc_fail_body() {
+  local line
+  line="$(maintenance_short_error "${1:-}")"
+  line="${line:0:4000}"
+  maintenance_sanitize_for_ping "$line"
 }
 
 maintenance_status_file() {
@@ -543,7 +581,8 @@ exit \$job_status"
     *) code="$outcome" ;;
   esac
   # Capture the job's own last line before recovery logs append to the file.
-  # The failure ping body is the log after recovery, so it includes that attempt.
+  # The status document keeps that line. The failure ping sends one sanitized
+  # line from the log as it stands when the ping is built.
   pre_error="$(maintenance_short_error "${MAINTENANCE_LOGFILE:-}")"
   echo "==== ${job_name} failed or lock held: $(date +%F_%H-%M-%S) ===="
   if cd "$repo"; then

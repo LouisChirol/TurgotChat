@@ -26,6 +26,13 @@ def _agent(collection: _Collection):
     )
 
 
+@pytest.fixture(autouse=True)
+def _fresh_chroma_probe_cache():
+    main._reset_chroma_probe_cache()
+    yield
+    main._reset_chroma_probe_cache()
+
+
 @pytest.fixture
 def client(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     monkeypatch.setattr(main, "TurgotGraphAgent", lambda: _agent(_Collection()))
@@ -126,3 +133,87 @@ def test_health_data_missing_or_corrupt_file_is_an_empty_document(
     assert corrupt_response.status_code == 200
     assert corrupt_response.json()["newest_backup_at"] is None
     assert "/home" not in corrupt_response.text
+
+
+def test_chroma_probe_is_reused_for_a_few_seconds(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    calls = {"n": 0}
+
+    class _Counting(_Collection):
+        def count(self):
+            calls["n"] += 1
+            return 4
+
+    monkeypatch.setattr(main, "TurgotGraphAgent", lambda: _agent(_Counting()))
+    monkeypatch.setenv("MAINTENANCE_STATUS_PATH", str(tmp_path / "missing.json"))
+    clock = {"t": 1000.0}
+    monkeypatch.setattr(main.time, "monotonic", lambda: clock["t"])
+    with TestClient(main.app) as client:
+        first = client.get("/")
+        second = client.get("/health")
+        assert first.status_code == 200
+        assert first.json() == RUNNING
+        assert second.status_code == 200
+        assert second.json() == {**RUNNING, "chroma": "ok"}
+        assert calls["n"] == 1
+        clock["t"] += main._CHROMA_PROBE_TTL_SECONDS
+        third = client.get("/")
+        assert third.status_code == 200
+        assert third.json() == RUNNING
+        assert calls["n"] == 2
+
+
+def test_chroma_failure_is_cached_without_leaking(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    calls = {"n": 0}
+
+    class _Boom(_Collection):
+        def count(self):
+            calls["n"] += 1
+            raise RuntimeError("sqlite locked at /app/database/chroma_db token=sekrit")
+
+    monkeypatch.setattr(main, "TurgotGraphAgent", lambda: _agent(_Boom()))
+    monkeypatch.setenv("MAINTENANCE_STATUS_PATH", str(tmp_path / "missing.json"))
+    with TestClient(main.app) as client:
+        first = client.get("/")
+        second = client.get("/health")
+
+    assert first.status_code == 503
+    assert second.status_code == 503
+    assert first.json() == {"detail": "Chroma unavailable"}
+    assert second.json() == {"detail": "Chroma unavailable"}
+    assert calls["n"] == 1
+    assert "sekrit" not in first.text
+    assert "sekrit" not in second.text
+    assert "/app/database" not in second.text
+
+
+def test_health_data_is_rate_limited_per_real_client(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    monkeypatch.setattr(main, "TurgotGraphAgent", lambda: _agent(_Collection()))
+    monkeypatch.setenv("MAINTENANCE_STATUS_PATH", str(tmp_path / "missing.json"))
+    headers = {
+        "X-Real-IP": "203.0.113.40",
+        "X-Forwarded-For": "198.51.100.8",
+    }
+    with TestClient(main.app, client=("172.18.0.9", 50000)) as client:
+        last = None
+        for _ in range(30):
+            last = client.get("/health/data", headers=headers)
+            assert last.status_code == 200
+        assert last is not None
+        assert last.headers["cache-control"] == "no-store"
+        assert last.json()["jobs"]["verify"]["status"] == "unknown"
+        forged = client.get(
+            "/health/data",
+            headers={
+                "X-Real-IP": "203.0.113.40",
+                "X-Forwarded-For": "198.51.100.99",
+            },
+        )
+        assert forged.status_code == 429
+        other = client.get("/health/data", headers={"X-Real-IP": "203.0.113.41"})
+        assert other.status_code == 200

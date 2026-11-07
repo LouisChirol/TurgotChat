@@ -312,6 +312,17 @@ def _cmd_counts_from_log(path: Path) -> int:
     return 0
 
 
+def _cmd_sanitize_error() -> int:
+    """Print one line safe to hand to a third party. Never echoes the raw input."""
+    try:
+        message = sys.stdin.read(8192)
+    except UnicodeError:
+        print("job failed")
+        return 0
+    print(sanitize_error(message) or "job failed")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Update the maintenance status file")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -330,6 +341,8 @@ def main(argv: list[str] | None = None) -> int:
     counts = sub.add_parser("counts-from-log")
     counts.add_argument("--file", required=True)
 
+    sub.add_parser("sanitize-error")
+
     args = parser.parse_args(argv)
     try:
         if args.command == "record":
@@ -338,6 +351,8 @@ def main(argv: list[str] | None = None) -> int:
             return _cmd_newest_backup()
         if args.command == "counts-from-log":
             return _cmd_counts_from_log(Path(args.file))
+        if args.command == "sanitize-error":
+            return _cmd_sanitize_error()
     except (ValueError, json.JSONDecodeError, OSError) as exc:
         print(f"maintenance status error: {exc.__class__.__name__}", file=sys.stderr)
         return 1

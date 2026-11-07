@@ -100,7 +100,7 @@ HC_VERIFY_URL=https://hc-ping.com/<verify-uuid>
 | `HC_BACKUP_URL` | Chroma snapshot at the start of each of those jobs (at least weekly, again on the monthly run) | 7 days | 1 day |
 | `HC_VERIFY_URL` | API verify/restore at the end of each of those jobs | 7 days | 1 day |
 
-The host crontab's timezone is the clock those schedules use. Pings are `$URL/start` when the step starts, `$URL` on success, and `$URL/fail` on failure. The failure request body is the last lines of that run's log.
+The host crontab's timezone is the clock those schedules use. Pings are `$URL/start` when the step starts, `$URL` on success, and `$URL/fail` on failure. The failure request body is one short line from that run's log, passed through the same `sanitize_error` filter as the public status file (paths, addresses, and secret-like tokens removed). The rest of the log stays on the server.
 
 Create the checks:
 
@@ -114,7 +114,7 @@ Create the checks:
 
 At the end of each job the cron updates `backend/logs/maintenance_status.json` (override with `MAINTENANCE_STATUS_PATH`). The existing backend mount `./backend/logs:/app/logs` makes that file visible in the container. No compose change is required. The host needs `python3` (stdlib only) so the cron can update the file; a writer failure is logged and does not fail the job.
 
-`GET /api/health/data` (backend route `GET /health/data`) returns that document. Timestamps are UTC. Each job has `last_run_at`, `last_success_at`, `status` (`ok`, `error`, or `unknown`), `duration_seconds`, and a short `error`. The document also has `newest_backup_at` and `collections` (document counts). Paths, internal hostnames, addresses, and secret-like tokens are stripped. The response does not include the status file path.
+`GET /api/health/data` (backend route `GET /health/data`) returns that document. Timestamps are UTC. Each job has `last_run_at`, `last_success_at`, `status` (`ok`, `error`, or `unknown`), `duration_seconds`, and a short `error`. The document also has `newest_backup_at` and `collections` (document counts). Paths, internal hostnames, addresses, and secret-like tokens are stripped. The response does not include the status file path. The route is limited to 30 requests per minute per visitor, using the `X-Real-IP` set by Caddy.
 
 `GET /api/` and `GET /api/health` read the Chroma collection the process already has open. When that read works, `/api/` is still exactly `{"message":"Turgot API is running"}`. When it does not, both routes return HTTP 503 with `{"detail":"Chroma unavailable"}`. The deploy workflow's `curl` of `/` and the maintenance API check use that status code.
 

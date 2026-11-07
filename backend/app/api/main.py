@@ -1,3 +1,4 @@
+import ipaddress
 import json
 import os
 import time
@@ -84,21 +85,75 @@ def _estimate_tokens(text: str) -> int:
         return 0
     return max(1, len(text) // 4)
 
-def get_client_ip(request: Request) -> str:
-    """
-    Resolve the real client IP.
+# Immediate peers that are allowed to tell us the visitor IP via X-Real-IP.
+# Caddy on the docker `web` network is one of these. A public peer is the
+# client itself, so forwarding headers from that connection are ignored.
+_TRUSTED_PROXY_NETWORKS = (
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+    ipaddress.ip_network("127.0.0.0/8"),
+    ipaddress.ip_network("169.254.0.0/16"),
+    ipaddress.ip_network("::1/128"),
+    ipaddress.ip_network("fc00::/7"),
+    ipaddress.ip_network("fe80::/10"),
+)
 
-    The backend sits behind nginx (reverse proxy on the same host), so
-    `request.client.host` is always nginx's own
-    loopback connection, not the visitor's IP. Without this, every visitor
-    would share a single rate-limit bucket. Nginx sets X-Forwarded-For, so
-    use its left-most (original client) entry instead.
+# Chat and chat-stream spend Mistral tokens. Do not raise this without a
+# matching look at the paid-call budget.
+CHAT_RATE_LIMIT = "15/minute"
+HEALTH_DATA_RATE_LIMIT = "30/minute"
+
+# / and /health both call collection.count(). Reuse the answer briefly so a
+# probe burst does not pile onto the Chroma SQLite file.
+_CHROMA_PROBE_TTL_SECONDS = 5.0
+_chroma_probe_cache: tuple[float, bool] | None = None
+
+
+def _single_client_ip(value: str | None) -> str | None:
+    """Parse one IP address. Lists and junk are rejected, not partially used."""
+    if value is None:
+        return None
+    candidate = value.strip()
+    if not candidate or len(candidate) > 128:
+        return None
+    if any(char in candidate for char in " \t,"):
+        return None
+    try:
+        return str(ipaddress.ip_address(candidate))
+    except ValueError:
+        return None
+
+
+def _peer_is_trusted_proxy(host: str) -> bool:
+    try:
+        peer = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    if isinstance(peer, ipaddress.IPv6Address) and peer.ipv4_mapped is not None:
+        peer = peer.ipv4_mapped
+    return any(peer in network for network in _TRUSTED_PROXY_NETWORKS)
+
+
+def get_client_ip(request: Request) -> str:
+    """Rate-limit identity for the visitor the edge proxy actually accepted.
+
+    Caddy replaces ``X-Real-IP`` (``header_up X-Real-IP {remote_host}``).
+    ``X-Forwarded-For`` is not a key: Caddy appends to it, so the first value
+    is whatever the client sent and would open a fresh 15/minute bucket.
+    The header is honored only when the TCP peer is the private proxy (or
+    loopback). A client that can reach the port directly is keyed by that
+    socket address, even if it sends forwarding headers.
     """
-    forwarded_for = request.headers.get("x-forwarded-for")
-    if forwarded_for:
-        return forwarded_for.split(",")[0].strip()
+    peer = ""
     if request.client and request.client.host:
-        return request.client.host
+        peer = request.client.host.strip()
+    if peer and _peer_is_trusted_proxy(peer):
+        real_ip = _single_client_ip(request.headers.get("x-real-ip"))
+        if real_ip:
+            return real_ip
+    if peer:
+        return peer
     return "unknown"
 
 
@@ -228,12 +283,27 @@ Instrumentator().instrument(app).expose(
 )
 
 
+def _reset_chroma_probe_cache() -> None:
+    global _chroma_probe_cache
+    _chroma_probe_cache = None
+
+
 def _chroma_ready() -> bool:
-    """Live Chroma read against the client opened during startup."""
-    if chroma_is_healthy(agent):
-        return True
-    logger.warning("Chroma health check failed")
-    return False
+    """Live Chroma read against the client opened during startup.
+
+    A successful or failed result is reused for a few seconds. The JSON
+    contract of ``/`` is unchanged; only how often ``count()`` runs changes.
+    """
+    global _chroma_probe_cache
+    now = time.monotonic()
+    cached = _chroma_probe_cache
+    if cached is not None and now - cached[0] < _CHROMA_PROBE_TTL_SECONDS:
+        return cached[1]
+    ok = chroma_is_healthy(agent)
+    if not ok:
+        logger.warning("Chroma health check failed")
+    _chroma_probe_cache = (now, ok)
+    return ok
 
 
 @app.get("/")
@@ -253,7 +323,8 @@ async def health():
 
 
 @app.get("/health/data")
-async def health_data():
+@limiter.limit(HEALTH_DATA_RATE_LIMIT)
+async def health_data(request: Request):
     """Read-only maintenance status. No secrets, host paths, or internal hostnames."""
     return JSONResponse(
         content=maintenance_data_document(),
@@ -262,7 +333,7 @@ async def health_data():
 
 
 @app.post("/chat", response_model=QuestionResponse)
-@limiter.limit("15/minute")
+@limiter.limit(CHAT_RATE_LIMIT)
 async def chat(request: Request, body: QuestionRequest):
     """
     Process a chat message and return Turgot's response.
@@ -309,7 +380,7 @@ async def chat(request: Request, body: QuestionRequest):
 
 
 @app.post("/chat-stream")
-@limiter.limit("15/minute")
+@limiter.limit(CHAT_RATE_LIMIT)
 async def chat_stream(request: Request, body: QuestionRequest):
     if not agent:
         raise HTTPException(status_code=503, detail="Agent not initialized")

@@ -150,7 +150,7 @@ HC_BACKUP_URL=           # chroma snapshot inside those jobs; period 7d, grace 1
 HC_VERIFY_URL=           # post-update verify; period 7d, grace 1d
 ```
 
-Each value is the check's base ping URL. The job calls `$URL/start`, `$URL` on success, and `$URL/fail` on failure. After a run, `GET /api/health/data` returns the last status, backup time, and Chroma collection counts. `GET /api/` stays `{"message":"Turgot API is running"}` when Chroma answers, and returns 503 when it does not.
+Each value is the check's base ping URL. The job calls `$URL/start`, `$URL` on success, and `$URL/fail` on failure. A failure ping carries one sanitized line, not the job log. After a run, `GET /api/health/data` returns the last status, backup time, and Chroma collection counts. `GET /api/` stays `{"message":"Turgot API is running"}` when Chroma answers, and returns 503 when it does not.
 
 ## Data Management
 
